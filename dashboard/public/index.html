@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planka Orchestrator Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1419;
+    color: #e1e8ed;
+    min-height: 100vh;
+  }
+  header {
+    background: #1a2332;
+    border-bottom: 1px solid #2d3748;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header h1 span { color: #4c9aff; }
+  .refresh-info {
+    font-size: 12px;
+    color: #718096;
+  }
+  .refresh-info .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #48bb78;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .panel {
+    background: #1a2332;
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid #2d3748;
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-body {
+    padding: 12px 18px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .panel-body::-webkit-scrollbar { width: 6px; }
+  .panel-body::-webkit-scrollbar-track { background: #1a2332; }
+  .panel-body::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .badge-active { background: #276749; color: #9ae6b4; }
+  .badge-fix { background: #9b2c2c; color: #feb2b2; }
+  .badge-feature { background: #2b6cb0; color: #90cdf4; }
+  .badge-working { background: #744210; color: #fbd38d; }
+  .badge-review { background: #553c9a; color: #d6bcfa; }
+  .badge-complete { background: #276749; color: #9ae6b4; }
+  .badge-stuck { background: #9b2c2c; color: #feb2b2; }
+  .badge-count {
+    background: #2d3748;
+    color: #a0aec0;
+    min-width: 22px;
+    text-align: center;
+  }
+
+  /* Active agents */
+  .agent-card {
+    background: #0f1419;
+    border: 1px solid #2d3748;
+    border-left: 3px solid #48bb78;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .agent-card .card-id { font-size: 11px; color: #718096; }
+  .agent-card .elapsed {
+    float: right;
+    font-size: 13px;
+    color: #48bb78;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .no-data {
+    color: #718096;
+    font-style: italic;
+    padding: 20px 0;
+    text-align: center;
+  }
+
+  /* Queue table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #2d3748;
+    font-size: 13px;
+  }
+  th {
+    color: #718096;
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  td.num { text-align: center; font-variant-numeric: tabular-nums; }
+  td.num.nonzero { color: #fbd38d; font-weight: 600; }
+
+  /* Log list */
+  .log-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #1e2d3d;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .log-entry:hover { background: #0f1419; margin: 0 -18px; padding: 8px 18px; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .log-name { color: #90cdf4; }
+  .log-entry .log-size { color: #718096; font-size: 11px; }
+
+  /* Log viewer - full width */
+  .full-width { grid-column: 1 / -1; }
+  #log-viewer {
+    display: none;
+  }
+  #log-viewer .panel-header {
+    cursor: pointer;
+  }
+  #log-viewer .panel-header:hover {
+    background: #2d3748;
+  }
+  #log-content {
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 500px;
+    overflow-y: auto;
+    color: #a0aec0;
+    padding: 14px 18px;
+  }
+  .loading { text-align: center; padding: 30px; color: #718096; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Planka</span> Orchestrator Dashboard</h1>
+  <div class="refresh-info"><span class="dot"></span>Auto-refresh every 10s &mdash; <span id="last-updated">loading...</span></div>
+</header>
+<main>
+  <!-- Active Agents -->
+  <div class="panel">
+    <div class="panel-header">
+      Active Agents
+      <span class="badge badge-count" id="active-count">0</span>
+    </div>
+    <div class="panel-body" id="active-agents">
+      <div class="loading">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Queue Depth -->
+  <div class="panel">
+    <div class="panel-header">Queue Depth by Project</div>
+    <div class="panel-body" id="queue-depth">
+      <div class="loading">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Recent Jobs -->
+  <div class="panel full-width">
+    <div class="panel-header">
+      Recent Jobs
+      <span class="badge badge-count" id="recent-count">0</span>
+    </div>
+    <div class="panel-body" id="recent-jobs">
+      <div class="loading">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Log Viewer -->
+  <div class="panel full-width" id="log-viewer">
+    <div class="panel-header" onclick="closeLogViewer()">
+      Log: <span id="log-viewer-name"></span> &mdash; click to close
+    </div>
+    <pre id="log-content"></pre>
+  </div>
+</main>
+
+<script>
+function formatElapsed(startISO) {
+  const ms = Date.now() - new Date(startISO).getTime();
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return h + "h " + m + "m " + s + "s";
+  if (m > 0) return m + "m " + s + "s";
+  return s + "s";
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString();
+}
+
+async function fetchStatus() {
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+
+    // Active agents
+    const activeEl = document.getElementById("active-agents");
+    document.getElementById("active-count").textContent = data.active.length;
+    if (data.active.length === 0) {
+      activeEl.innerHTML = '<div class="no-data">No active agents</div>';
+    } else {
+      activeEl.innerHTML = data.active.map(a => `
+        <div class="agent-card">
+          <span class="elapsed">${formatElapsed(a.startTime)}</span>
+          <div class="card-id">Card: ${a.cardId}</div>
+          <div style="margin-top:4px;font-size:12px;color:#718096">${a.filename}</div>
+        </div>
+      `).join("");
+    }
+
+    // Recent jobs
+    const recentEl = document.getElementById("recent-jobs");
+    document.getElementById("recent-count").textContent = data.recent.length;
+    if (data.recent.length === 0) {
+      recentEl.innerHTML = '<div class="no-data">No recent jobs</div>';
+    } else {
+      recentEl.innerHTML = `<table>
+        <thead><tr><th>Log File</th><th>Card ID</th><th>Started</th><th>Size</th><th></th></tr></thead>
+        <tbody>${data.recent.map(l => `
+          <tr>
+            <td><span class="log-entry-name" style="color:#90cdf4;cursor:pointer" onclick="viewLog('${l.filename}')">${l.filename}</span></td>
+            <td style="color:#718096;font-size:12px">${l.cardId}</td>
+            <td style="color:#718096;font-size:12px">${formatTime(l.startTime)}</td>
+            <td style="color:#718096;font-size:12px">${formatSize(l.size)}</td>
+            <td><button onclick="viewLog('${l.filename}')" style="background:#2d3748;color:#90cdf4;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">View</button></td>
+          </tr>
+        `).join("")}</tbody>
+      </table>`;
+    }
+  } catch (err) {
+    console.error("Failed to fetch status:", err);
+  }
+}
+
+async function fetchQueue() {
+  try {
+    const res = await fetch("/api/queue");
+    const data = await res.json();
+
+    const el = document.getElementById("queue-depth");
+    if (data.length === 0) {
+      el.innerHTML = '<div class="no-data">No projects configured</div>';
+      return;
+    }
+    el.innerHTML = `<table>
+      <thead><tr><th>Project</th><th>Fix</th><th>Feature</th><th>Working</th><th>Review</th><th>Complete</th><th>Stuck</th></tr></thead>
+      <tbody>${data.map(p => {
+        if (p.error) {
+          return `<tr><td>${p.name}</td><td colspan="6" style="color:#fc8181">${p.error}</td></tr>`;
+        }
+        const c = p.counts;
+        function cell(v) { return '<td class="num' + (v > 0 ? ' nonzero' : '') + '">' + v + '</td>'; }
+        return `<tr><td>${p.name}</td>${cell(c.Fix)}${cell(c.Feature)}${cell(c.Working)}${cell(c["Ready to Review"])}${cell(c.Complete)}${cell(c.Stuck)}</tr>`;
+      }).join("")}</tbody>
+    </table>`;
+  } catch (err) {
+    console.error("Failed to fetch queue:", err);
+  }
+}
+
+async function viewLog(filename) {
+  const viewer = document.getElementById("log-viewer");
+  const content = document.getElementById("log-content");
+  const nameEl = document.getElementById("log-viewer-name");
+  nameEl.textContent = filename;
+  content.textContent = "Loading...";
+  viewer.style.display = "block";
+  try {
+    const res = await fetch("/api/logs/" + encodeURIComponent(filename));
+    content.textContent = await res.text();
+    content.scrollTop = content.scrollHeight;
+  } catch {
+    content.textContent = "Failed to load log file.";
+  }
+}
+
+function closeLogViewer() {
+  document.getElementById("log-viewer").style.display = "none";
+}
+
+function refresh() {
+  fetchStatus();
+  fetchQueue();
+  document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>

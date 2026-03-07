@@ -1,0 +1,12 @@
+All done. Here's a summary of what was implemented:
+
+**Branch:** `feature/Set-up-auto-deploy-on-GitHub-push-for-all-of-these-projects`
+
+**Changes:**
+1. **4 project configs updated** (BotPyle, Energy Explorer, Resources, VeRO) — changed `deployMethod` from `"manual"` to `"git-push-main"` and added a `deployCommand` field with the Docker rebuild command (e.g., `cd C:\Users\JonDi\Desktop\Hosting && docker compose up -d --build <service>`)
+2. **Orchestrator updated** (`planka_poll.ps1`) — the deploy prompt builder now checks for `deployCommand` on `git-push-main` projects and instructs the deploy agent to run it after pushing to main
+3. **Documentation updated** (`QUEUE_WORKER.md`) — added `deployCommand` to the config schema and fields table
+
+**Unchanged:** HSP Portal (already auto-deploys via Laravel Cloud) and Planka Orchestrator (stays manual — no real deployment needed).
+
+Card moved to **Ready to Review** with summary comment and GitHub review link.
