@@ -267,12 +267,22 @@ $claudeMd
         $cardName = $card.name
 
         if ($project.deployMethod -eq "git-push-main") {
-            $deploySteps = @"
+            if ($project.deployCommand) {
+                $deploySteps = @"
+5. git push origin main
+6. Run the deploy command: $($project.deployCommand)
+7. Delete the branch locally and remotely: git branch -d BRANCHNAME then git push origin --delete BRANCHNAME
+8. Add a comment to the card: 'Merged to main and deployed to production.'
+9. Move card to Deployed: PATCH $PLANKA_URL/cards/$cardIdVal with body {"listId":"$deployedListId","position":1}
+"@
+            } else {
+                $deploySteps = @"
 5. git push origin main (triggers auto-deploy)
 6. Delete the branch locally and remotely: git branch -d BRANCHNAME then git push origin --delete BRANCHNAME
 7. Add a comment to the card: 'Merged to main and deployed to production.'
 8. Move card to Deployed: PATCH $PLANKA_URL/cards/$cardIdVal with body {"listId":"$deployedListId","position":1}
 "@
+            }
         } elseif ($project.deployMethod -eq "manual") {
             $deploySteps = @"
 5. git push origin main

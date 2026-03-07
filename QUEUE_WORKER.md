@@ -67,6 +67,7 @@ Each project has a JSON config file at `projects/<project-name>.json` with this 
   "workspace": "C:\\path\\to\\project\\repo",
   "localDevUrl": "http://127.0.0.1:8000",
   "deployMethod": "git-push-main",
+  "deployCommand": "cd C:\\path\\to\\hosting && docker compose up -d --build my-service",
   "deployNotes": "Pushing to main triggers auto-deploy.",
   "lists": {
     "ideas": "<list-id>",
@@ -90,6 +91,7 @@ Each project has a JSON config file at `projects/<project-name>.json` with this 
 | `workspace` | Yes | Absolute path to the git repo root on disk |
 | `localDevUrl` | No | URL of the local dev server for testing (if applicable) |
 | `deployMethod` | Yes | One of: `git-push-main` (push to main triggers deploy), `manual` (human deploys), `script` (run a deploy script) |
+| `deployCommand` | No | Shell command to run after pushing to main (e.g., `docker compose up -d --build myapp`). Used with `git-push-main` to auto-deploy locally hosted projects. |
 | `deployNotes` | No | Freeform notes about how deployment works for this project |
 | `lists` | Yes | Map of list names to Planka list IDs |
 

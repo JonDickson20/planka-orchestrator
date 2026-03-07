@@ -3,8 +3,9 @@
     "boardId": "1725049513221030995",
     "workspace": "C:\\Users\\JonDi\\Desktop\\VeRO",
     "localDevUrl": "https://vero.jondxn.com",
-    "deployMethod": "manual",
-    "deployNotes": "Hosted locally via Docker. After merging to main, rebuild with: cd C:\\Users\\JonDi\\Desktop\\Hosting && docker compose up -d --build vero",
+    "deployMethod": "git-push-main",
+    "deployCommand": "cd C:\\Users\\JonDi\\Desktop\\Hosting && docker compose up -d --build vero",
+    "deployNotes": "Hosted locally via Docker. Auto-rebuilds after merge to main.",
     "lists": {
         "ideas": "1725475438534329467",
         "fix": "1725049520401679455",

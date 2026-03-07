@@ -1,0 +1,17 @@
+All done. Here's a summary of what was implemented:
+
+**Branch:** `feature/Web-dashboard-for-orchestrator-status`
+
+**Files added:**
+- `dashboard.py` — A standalone Python HTTP server (stdlib only, zero external dependencies) that serves a live orchestrator dashboard on port 3333
+- `.gitignore` — Excludes `__pycache__/` and `*.pyc`
+
+**Dashboard features:**
+- **Active agents** — Shows cards in the "Working" list with elapsed time since they entered that list
+- **Queue depth** — Per-project counts of Fix and Feature cards waiting
+- **Job status panels** — Ready to Review, Complete, Stuck, and Deployed cards across all projects
+- **Log file viewer** — Lists all agent logs sorted by recency; click any log to view its contents in a modal
+- **Auto-refresh** — Polls `/api/status` every 10 seconds with a visible countdown
+- **Dark theme** — Clean, minimal UI designed for monitoring
+
+**Run with:** `python dashboard.py` (defaults to port 3333, or `--port <n>`)

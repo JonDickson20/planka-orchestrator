@@ -1,0 +1,21 @@
+Done. Here's a summary of what was implemented:
+
+**Branch:** `feature/Cost-tracking-per-agent-run`
+
+**New file: `cost_tracker.ps1`** — Cost tracking module with:
+- `Parse-AgentLog` — Parses stream-json log files for the result message containing `usage` (input/output/cache tokens), `cost_usd`, `duration_ms`, `num_turns`. Falls back to regex patterns for plain-text logs.
+- `Extract-AgentResultText` — Extracts human-readable text from stream-json logs for stuck-card messages.
+- `Record-AgentRun` — Saves per-card run data to `data/costs.json` (cardId, cardName, projectName, timestamps, duration, tokens, cost, exit code).
+- `Get-CostSummary` — Aggregates daily/weekly/all-time spend across all projects.
+- `Write-CostSummary` — Prints formatted summary to orchestrator console.
+- `Format-CostComment` — Formats a one-line cost string for Planka comments and log output.
+
+**Modified: `planka_poll.ps1`** —
+- `Spawn-Agent` now uses `--output-format stream-json` to capture structured token/cost data from Claude CLI
+- `Cleanup-Agents` records every completed run (success, failure, timeout) to `data/costs.json` and prints cost info
+- Posts per-card cost as a Planka comment on successful agent completions
+- Includes cost info in stuck-card error messages
+- Periodic cost summary logged every 60 minutes
+- Fixed comment API endpoint from `/comment-actions` to `/comments`
+
+**New file: `.gitignore`** — Excludes `logs/`, `data/costs.json`, `__pycache__/`
