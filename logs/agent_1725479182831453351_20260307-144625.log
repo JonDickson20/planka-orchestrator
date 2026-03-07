@@ -1,0 +1,15 @@
+All done. Here's a summary of what was implemented:
+
+**Search & Zoom to Country** — `feature/Search-Zoom-to-Country`
+
+**Files changed:**
+- `resource-flow-viz/index.html` — Added search bar HTML with input and dropdown container
+- `resource-flow-viz/src/style.css` — Added 90+ lines of styling for search bar, results dropdown, and responsive layout
+- `resource-flow-viz/src/main.js` — Added `FlyToInterpolator` import, `setupCountrySearch()` function with:
+  - Autocomplete filtering against all countries (by name or ISO code)
+  - Fly-to animation (2s smooth transition to zoom level 4)
+  - Sets selected country to highlight its trade flows
+  - Keyboard navigation (Arrow keys, Enter, Escape)
+  - Prevents global shortcuts from firing while typing in search
+
+**Card status:** Moved to Ready to Review with summary comment and [review link](https://github.com/JonDickson20/resources/compare/main...feature/Search-Zoom-to-Country).

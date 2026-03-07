@@ -1,0 +1,17 @@
+{
+    "name": "Planka Orchestrator",
+    "boardId": "1725680206049445092",
+    "workspace": "C:\\Users\\JonDi\\Desktop\\planka",
+    "deployMethod": "manual",
+    "deployNotes": "No deployment needed — changes take effect on next orchestrator restart.",
+    "lists": {
+        "ideas": "1725680206846362856",
+        "fix": "1725680207559394537",
+        "feature": "1725680208297592042",
+        "working": "1725680209178395883",
+        "readyToReview": "1725680209908204780",
+        "complete": "1725680210654790893",
+        "stuck": "1725680211468485870",
+        "deployed": "1725680212298958063"
+    }
+}

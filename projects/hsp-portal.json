@@ -1,0 +1,18 @@
+﻿{
+    "boardId":  "1723677218590163975",
+    "name":  "HSP Portal",
+    "deployNotes":  "Pushing to main triggers Laravel Cloud auto-deploy.",
+    "localDevUrl":  "http://127.0.0.1:8500",
+    "lists":  {
+                  "ideas":  "1725475435145331833",
+                  "complete":  "1723706359129572367",
+                  "deployed":  "1723738539952178204",
+                  "fix":  "1723697014983623691",
+                  "working":  "1723706357443462157",
+                  "readyToReview":  "1723706358282322958",
+                  "stuck":  "1723706359960044560",
+                  "feature":  "1723706356780762124"
+              },
+    "deployMethod":  "git-push-main",
+    "workspace":  "C:\\Users\\JonDi\\Desktop\\HSP\\Portal"
+}

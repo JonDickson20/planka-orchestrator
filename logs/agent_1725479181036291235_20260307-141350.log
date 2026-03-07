@@ -1,0 +1,22 @@
+All done. Here's a summary of what was completed:
+
+**Feature: Age & Activity Level Personalization**
+
+**Branch:** `feature/Age-Activity-Level-Personalization`
+
+**Changes made across 3 files:**
+
+1. **`index.html`** — Added "About You" section with age slider (5-17) and activity level buttons (Sedentary/Moderate/Active), plus a dynamic explanation text area and a new personalization legend card.
+
+2. **`app.js`** — Added:
+   - `childAge` and `activityLevel` state variables
+   - `ageScaleFactor()` — linear scaling from 0.65x (age 5) to 1.4x (age 17), normalized at 1.0x for age 10
+   - `ACTIVITY_MULTIPLIERS` — sedentary 0.85x, moderate 1.0x, active 1.2x
+   - `personalizationMultiplier()` — combines age and activity factors
+   - Applied multiplier to food `peak`/`crash` values and exercise `dipDepth`/`boostPeak` values
+   - Setup functions for the age slider and activity buttons
+   - Dynamic explanation text that updates based on selections
+
+3. **`style.css`** — Full styling for the About You section with orange accent theme, activity buttons with active states, age slider, explanation panel, personalization legend card, and responsive mobile layout.
+
+**Card moved to Ready to Review** with summary comment and GitHub compare link.

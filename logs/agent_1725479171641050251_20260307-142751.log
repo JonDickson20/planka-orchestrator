@@ -1,0 +1,22 @@
+Done. Here's a summary of what was implemented:
+
+**Session Recording Playback** — Branch: `feature/Session-Recording-Playback`
+
+### Changes (5 files, 614 lines added):
+
+**Backend:**
+- `routes/web.php` — Added `GET /sessions/{session}/replay` and `GET /sessions/{session}/inputs` routes
+- `PilotSessionController.php` — Added `replay()` method (loads session with auth check, passes control schema) and `inputsJson()` method (fetches JSONL from S3, parses it, returns JSON array)
+
+**Frontend:**
+- **New `replay.blade.php`** — Full replay UI with:
+  - HTML5 video player with presigned S3 URL
+  - Custom timeline bar with color-coded input markers (red = button press, green = axis movement)
+  - Playhead scrubbing via click/drag
+  - Play/pause, skip ±5s, keyboard shortcuts (Space, Arrow keys)
+  - Speed controls (0.25x, 0.5x, 1x, 2x, 4x)
+  - Live gamepad state visualization (dual stick canvases + button indicators) synced to video time
+  - Scrollable event table with click-to-seek and auto-highlighting of current event
+  - Session metadata sidebar (bot, pilot, date, resolution, FPS, codec, size)
+- **`show.blade.php`** — Added green "Watch Replay" button in the recording section
+- **`index.blade.php`** — Added play button next to sessions that have recordings

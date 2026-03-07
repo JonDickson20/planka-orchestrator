@@ -1,0 +1,18 @@
+All done. Here's a summary of what was implemented:
+
+## Real-Time Bot Telemetry Dashboard
+
+**Branch:** `feature/Real-Time-Bot-Telemetry-Dashboard`
+
+### Changes (5 files, +273 / -46 lines)
+
+**New files:**
+- **`app/Http/Controllers/BotStreamController.php`** — SSE endpoint at `GET /bots/status/stream`. Opens a persistent `text/event-stream` connection, checks bot status every 3 seconds, and only pushes `bot-status` events when something changes. Auto-closes after 5 minutes (client auto-reconnects).
+- **`public/js/bot-telemetry.js`** — Frontend module that connects via `EventSource`, updates DOM badges in real time, and falls back to 10-second polling if SSE is unsupported. Shows a live connection indicator (green dot = connected, yellow = reconnecting, blue = polling fallback).
+
+**Modified files:**
+- **`routes/web.php`** — Added `bots/status/stream` route
+- **`resources/views/dashboard.blade.php`** — Replaced polling `setInterval` with SSE via `BotTelemetry.init()`, added live indicator
+- **`resources/views/pages/bots/index.blade.php`** — Same SSE integration + live indicator
+
+**Review:** https://github.com/JonDickson20/botpyle/compare/main...feature/Real-Time-Bot-Telemetry-Dashboard

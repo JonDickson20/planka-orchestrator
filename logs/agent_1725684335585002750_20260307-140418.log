@@ -1,0 +1,17 @@
+All done. Here's a summary of what was fixed:
+
+**Problem:** The top-right nav links on the homepage were out of order (didn't match the page section order when scrolling), and "Providers" and "Facilities" both linked to the same area.
+
+**Changes made** in `resources/views/home-landing.blade.php`:
+
+1. **Consolidated** the separate "Providers" (`#providers`) and "Facilities" (`#facilities`) links into a single **"Providers & Facilities"** link pointing to `#facilities` — since both anchors lived in the same dual-path section
+2. **Reordered** the nav links to match the top-to-bottom page flow:
+   - **Providers & Facilities** → `#facilities` (first section)
+   - **Why HSP** → `#compare` (second section)
+   - **Specialties** → `#specialties` (third section)
+   - **Provider App** → `/login` (CTA, stays last)
+
+The `#providers` anchor ID still exists on the provider card within the section, so any existing bookmarks to `/#providers` continue to work.
+
+**Branch:** `fix/Top-right-menu-links-On-the-home-page-are-out-of-order`
+**Card:** Moved to Ready to Review.

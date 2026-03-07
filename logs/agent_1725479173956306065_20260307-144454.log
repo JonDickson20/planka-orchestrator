@@ -1,0 +1,28 @@
+All done. Here's a summary of what was completed:
+
+## Completed: Migrate from JSON File Storage to SQLite
+
+**Branch:** `feature/Migrate-from-JSON-File-Storage-to-SQLite`
+**Card:** Moved to "Ready to Review"
+
+### Changes Made
+
+1. **New `services/db.js`** — SQLite database layer using `better-sqlite3`
+   - 9 tables: `brands`, `listings`, `reports`, `users`, `sessions`, `seller_history`, `image_hashes`, `skus`, `serp_reports`
+   - Proper indexes on `brandId`, `status`, `itemId`, `email`, etc.
+   - WAL mode for concurrent read performance
+   - JSON column serialize/deserialize helpers
+   - One-time auto-migration from existing JSON files on first startup
+
+2. **Rewritten services:**
+   - `services/monitor.js` — brands, listings, reports, seller history all use SQLite. New `insertListings()` for efficient batch inserts during scans
+   - `services/users.js` — users and sessions use SQLite
+   - `services/imageHash.js` — image hash library uses SQLite
+   - `services/serpReport.js` — SERP reports use SQLite
+   - `routes/skuRoutes.js` — SKUs use SQLite (no more per-brand JSON files)
+
+3. **Same API signatures preserved** — all routes work unchanged
+
+4. **Dockerfile updated** — added `python3 make g++` for native `better-sqlite3` compilation
+
+5. **Tested:** Server startup, user registration, login, brand CRUD, listing queries, stats, report history, subscription — all verified working

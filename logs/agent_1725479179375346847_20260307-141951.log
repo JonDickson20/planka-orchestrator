@@ -1,0 +1,16 @@
+All done. Here's a summary of what was implemented:
+
+**Changes made (`app.js` + `style.css`):**
+
+1. **Fun facts data** — Added a `funFact` string to all 22 food items and 10 exercise items with kid-friendly educational facts (e.g., "Oatmeal has beta-glucan fiber that slows digestion — that's why the energy lasts so long!")
+
+2. **Tooltip system** — Created a shared floating tooltip element with:
+   - **Desktop**: Shows on hover (`mouseenter`/`mouseleave`)
+   - **Mobile**: Shows on tap-and-hold (500ms `touchstart` delay)
+   - Smart positioning: appears above the item, flips below if near viewport top, clamps to horizontal bounds
+
+3. **Tooltip styling** — Dark theme card with golden border glow (`var(--primary-glow)`), arrow indicator, smooth opacity transition
+
+**Branch:** `feature/Fun-Fact-Tooltips-on-Foods-Exercises`  
+**Card:** Moved to Ready to Review  
+**Review link:** https://github.com/JonDickson20/Energy-Explorer/compare/main...feature/Fun-Fact-Tooltips-on-Foods-Exercises

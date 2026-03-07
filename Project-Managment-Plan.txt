@@ -1,0 +1,29 @@
+So you've probably heard me mentioning this week that "we can be so much more efficient" and talking about your development loop. I spent a little time this morning trying to articulate my thoughts. Hopefully this makes sense.
+
+Right now, we're feeling very fast because of the new AI tooling that lets us translate ideas into features very quickly but, fundamentally, your loop is still "single threaded". 
+
+Right now, you're sitting at your computer for hours and your loop looks like this I imagine: Think of a feature you want>describe the feature to AI> Wait for a result> Assess the output> iterate and refine until happy>think of a new feature and start over.
+
+That's great, and it's fun, but its working like a junior developer. We need to step back into the project manager role and use your development team (of AI agents). This is the "agentic development" everyone is buzzing about.
+
+Instead, like a more mature software operation (this is how MyShopManager ran at the end), we need to set up a kanban or project management tool like jira. I'm partial to kanbans myself (i see you use some in Monday.com too) but anything works here, the concept is the same.
+
+When you dream up a new feature idea, you don't start talking to claude desktop in a single window. Instead, write your prompt into a ticket on the kanban. I would do the same.
+
+On my desktop where my local enviroment runs, I already have a system built where queue workers (agents) monitor a kanban continuously for new feature ideas and bugfixes. When one pops up, a worker claims it, and starts working. Sometimes this is quick, sometimes it takes an hour. The key is that you're not sitting there watching them work. You're free to put in another idea, or play with your kids, while the worker works.
+
+Critically, the worker has a very specific and detailed managemnt prompt that guides them to check the work, browse to the feature after completion in a headless browser to make sure it "looks right", build unit tests to make sure the feature never breaks, run the feature locally to test for errors, etc. This is something you probably are not doing every time you say "add a new button that does XYZ", but it eliminates a TON of back-and-forth with the AI if properly prompt-enginereed.
+
+When the worker is done with the ticket, they go into a ready-to-review category where you can see the worker's notes on what they did, and then either toss the ticket (full of context) back into the work queue with your own notes, or toss it into the complete section.
+
+This is how I ran my dev team at the end. I wrote no code and it worked well. It's a common structure for project managers.
+
+Now, here's where it gets REALLY fun: another process that watches the codebase, and the queue, and dreams up ENTIRELY NEW FEATURES based on what users might like, what new tools are available online, what functions are stressing our servers, what the traffic patterns look like, news online, etc. Sky's the limit. This all stuff an AI and automatically and realistically log and monitor. I've already been testing this. 
+
+When that agent comes up with ideas, they go into the front of the queue as idea cards, and always tries to keep 5 to 10 fresh ideas in there for review. The workers don't just start working them right away. Instead, at your convenience, you simply hop on your phone, read through the ideas queue, and drag the cards where you want. Good ideas go into the work queue to get built, bad ideas get tossed in the trash. You can always add notes and suggestions to make them better too, obviously.
+
+This is all feasible today and I've built most of it already. Lots of other people doing this too. Remember, if you don't hit your Claude usage quota every day, you lost money. That's the limit.
+
+I'll be polishing this system up, but wanted you to see the picture I keep mentioning more clearly. Now that's a pile of human brain dump, so here's an AI TLDR:
+
+TLDR: 

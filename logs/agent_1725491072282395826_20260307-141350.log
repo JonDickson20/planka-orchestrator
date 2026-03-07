@@ -1,0 +1,19 @@
+All done. Here's a summary of what was implemented:
+
+**Branch:** `fix/Make-sure-a-session-is-saved-every-time-a-bot-is-piloted`
+
+**Changes made to ensure every pilot session is recorded:**
+
+1. **Force recording on all sessions** (`PilotSessionController.php`) - `recording_enabled` is always `true`, regardless of bot setting
+
+2. **Bot show page gets a "Start Pilot Session" button** (`bots/show.blade.php`) - Users can no longer send raw gamepad commands from the view page; they must start a proper recorded session. The stream is still viewable but controls are disabled
+
+3. **New auto-end API** (`SessionEndController.php` + `api.php`) - `POST /api/sessions/auto-end` accepts relay callbacks and browser beacons to close orphaned sessions
+
+4. **Browser beacon on tab close** (`pilot.blade.php`) - `navigator.sendBeacon` fires on `beforeunload` to auto-end the session if the user closes the tab without clicking "End Session"
+
+5. **Relay: browser disconnect auto-stop** (`relay.py`) - Tracks which browser started which recording; auto-stops recording and notifies Laravel when browser disconnects
+
+6. **Relay: idle timeout** (`relay.py`) - Every 30s checks for recordings with no control input for 5 minutes; auto-stops them and notifies Laravel
+
+**Review:** https://github.com/JonDickson20/botpyle/compare/main...fix/Make-sure-a-session-is-saved-every-time-a-bot-is-piloted

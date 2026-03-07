@@ -1,0 +1,10 @@
+All done. Here's a summary of what was implemented:
+
+**Historical Events Timeline Overlay** - `feature/Historical-Events-Timeline-Overlay`
+
+**What changed:**
+- **`src/main.js`** - Added `HISTORICAL_EVENTS` data array with 6 major events (1973 Oil Crisis, 1979 Iranian Revolution, 1990 Gulf War, 2008 Financial Crisis, 2014 Russia Sanctions, 2020 COVID Collapse). Added `setupSliderMarkers()` logic to render diamond-shaped event markers on the slider. Added `updateEventTooltip()` function that shows an educational tooltip when the slider lands on an event year, with auto-dismiss after 4 seconds and edge-clamping for proper positioning.
+- **`src/style.css`** - Added styles for `.event-marker` (orange diamond, glow on active), `#event-tooltip` (glassmorphism popup above slider with fade transition).
+- **`index.html`** - Added `#event-tooltip` container inside `.slider-wrapper`.
+
+**Card status:** Moved to Ready to Review with summary comment and GitHub review link posted.

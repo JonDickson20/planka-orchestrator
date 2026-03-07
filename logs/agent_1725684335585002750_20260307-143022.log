@@ -1,0 +1,7 @@
+Deployment complete. Here's a summary of what was done:
+
+1. **Merged** `fix/Top-right-menu-links-On-the-home-page-are-out-of-order` into `main` (1 file changed: `resources/views/home-landing.blade.php`)
+2. **Pushed** to `origin/main` — Laravel Cloud auto-deploy triggered
+3. **Cleaned up** branch locally and on remote
+4. **Commented** on the Planka card: "Merged to main and deployed to production."
+5. **Moved** card to the **Deployed** list

@@ -1,0 +1,9 @@
+All done. Here's what was changed in `app.js`:
+
+**Sorted 3 foods from the "Mixed / special foods" catch-all section into their proper macro groups:**
+
+1. **Protein Smoothie** — moved into the Protein group (was already `macro: 'protein'`)
+2. **Pizza** — moved into the Complex Carbs group (was already `macro: 'carbs'`)
+3. **Broccoli** — moved into the Complex Carbs group and **fixed macro from `'fat'` to `'carbs'`** (broccoli is a vegetable, not a fat)
+
+The "Mixed / special foods" section was removed entirely. Branch pushed and card moved to Ready to Review.
