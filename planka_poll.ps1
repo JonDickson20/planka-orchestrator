@@ -199,7 +199,7 @@ function Move-CardToStuck {
     try {
         Planka-Patch "/cards/$cardId" ('{"listId":"' + $stuckListId + '","position":1}')
         $escapedMsg = $message -replace '\\', '\\\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", ''
-        Planka-Post "/cards/$cardId/comment-actions" ('{"text":"' + $escapedMsg + '"}')
+        Planka-Post "/cards/$cardId/comments" ('{"text":"' + $escapedMsg + '"}')
     } catch {
         Write-Host "    Warning: Failed to move card $cardId to Stuck: $($_.Exception.Message)" -ForegroundColor Red
     }
@@ -442,7 +442,7 @@ function Cleanup-Agents {
                 try {
                     $costComment = "Agent run stats: $costInfo"
                     $escapedComment = $costComment -replace '\\', '\\\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", ''
-                    Planka-Post "/cards/$cardId/comment-actions" ('{"text":"' + $escapedComment + '"}')
+                    Planka-Post "/cards/$cardId/comments" ('{"text":"' + $escapedComment + '"}')
                 } catch {
                     Write-Host "    Warning: Could not post cost comment to card" -ForegroundColor DarkYellow
                 }
