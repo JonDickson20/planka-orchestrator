@@ -128,7 +128,7 @@ The orchestrator (`planka_poll.ps1`) handles claiming:
 1. It polls each project board every 30 seconds.
 2. It selects cards from Fix (priority) then Feature.
 3. It moves the card to "Working" before spawning the agent.
-4. **One agent per project at a time** — prevents git workspace conflicts.
+4. **Worktree isolation** — each work agent gets an isolated git worktree, allowing multiple agents per project simultaneously. Deploy agents still use the main workspace with per-project locking.
 5. The card is already in "Working" when your agent starts.
 
 ### Step 2 — Plan
@@ -204,7 +204,7 @@ The polling script (`planka_poll.ps1`) is a **persistent orchestrator** that run
 
 1. **Never exits** — it runs in an infinite loop with a configurable poll interval.
 2. **Multi-project** — scans all config files in `projects/` and polls each board.
-3. **Per-project locking** — only one agent per project at a time to prevent git conflicts.
+3. **Worktree isolation** — each work agent (fix/feature) gets an isolated git worktree, enabling multiple agents per project. Deploy agents still use the main workspace with per-project locking.
 4. **Spawns Claude Code agents** — when a card is found, it spawns `claude -p "..."` as a background process.
 5. **Tracks active workers** — maintains a map of card IDs to running processes, cleans up finished ones.
 6. **Enforces concurrency** — max workers configurable (default 2).

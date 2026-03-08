@@ -16,14 +16,16 @@ $MAX_WORKERS         = 2      # Max simultaneous Claude Code agents (total acros
 $MAX_AGENT_MINUTES   = 30     # Kill agents that run longer than this
 $PROJECTS_DIR        = Join-Path $PSScriptRoot "projects"
 $LOG_DIR             = Join-Path $PSScriptRoot "logs"
+$WORKTREE_DIR        = Join-Path $PSScriptRoot "worktrees"
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Ensure log directory
+# Ensure log and worktree directories
 if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null }
+if (-not (Test-Path $WORKTREE_DIR)) { New-Item -ItemType Directory -Path $WORKTREE_DIR -Force | Out-Null }
 
 # State
-# Each entry: { process, cardId, projectName, startTime, promptFile, logFile }
+# Each entry: { process, cardId, startTime, promptFile, logFile, action, worktreePath, mainWorkspace }
 $activeJobs = @{}
 
 # Auth (cached, re-auth only on failure)
@@ -151,6 +153,60 @@ function Get-GitHubCompareBase {
     return $null
 }
 
+# Create a git worktree for isolated agent work
+function Create-Worktree {
+    param([string]$workspace, [string]$branchName, [string]$cardId)
+
+    $worktreePath = Join-Path $WORKTREE_DIR $cardId
+
+    # Clean up stale worktree at this path if it exists
+    if (Test-Path $worktreePath) {
+        & git -C $workspace worktree remove $worktreePath --force 2>&1 | Out-Null
+        if (Test-Path $worktreePath) {
+            Remove-Item -Path $worktreePath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        & git -C $workspace worktree prune 2>&1 | Out-Null
+    }
+
+    # Delete stale local branch if it exists
+    & git -C $workspace branch -D $branchName 2>&1 | Out-Null
+
+    # Fetch latest main
+    $fetchResult = & git -C $workspace fetch origin main 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "    Warning: git fetch failed: $fetchResult" -ForegroundColor Yellow
+    }
+
+    # Create worktree with new branch from origin/main
+    $result = & git -C $workspace worktree add $worktreePath -b $branchName origin/main 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "    Failed to create worktree: $result" -ForegroundColor Red
+        return $null
+    }
+
+    return $worktreePath
+}
+
+# Remove a git worktree and clean up the local branch
+function Remove-Worktree {
+    param([string]$workspace, [string]$worktreePath, [string]$branchName)
+
+    if ($worktreePath -and (Test-Path $worktreePath)) {
+        & git -C $workspace worktree remove $worktreePath --force 2>&1 | Out-Null
+
+        # Fallback: remove directory and prune
+        if (Test-Path $worktreePath) {
+            Remove-Item -Path $worktreePath -Recurse -Force -ErrorAction SilentlyContinue
+            & git -C $workspace worktree prune 2>&1 | Out-Null
+        }
+    }
+
+    # Clean up the local branch (remote branch preserved for review)
+    if ($branchName) {
+        & git -C $workspace branch -D $branchName 2>&1 | Out-Null
+    }
+}
+
 # Agent Spawning
 function Spawn-Agent {
     param([string]$cardId, [string]$prompt, [string]$workspace)
@@ -175,11 +231,11 @@ function Spawn-Agent {
     }
 }
 
-# Check if a project already has an active agent
-function Project-HasActiveAgent {
+# Check if a project already has an active deploy agent (work agents use worktrees, no locking needed)
+function Project-HasActiveDeployAgent {
     param([string]$projectName)
     foreach ($entry in $activeJobs.GetEnumerator()) {
-        if ($entry.Key.StartsWith("$projectName`:")) {
+        if ($entry.Key.StartsWith("$projectName`:") -and $entry.Value.action -eq "deploy") {
             return $true
         }
     }
@@ -227,7 +283,7 @@ function Get-WorkingListId {
 
 # Build Agent Prompt
 function Build-AgentPrompt {
-    param($card, $action, $listSource, $project)
+    param($card, $action, $listSource, $project, $worktreePath)
 
     $protocol = Get-Content (Join-Path $PSScriptRoot "QUEUE_WORKER.md") -Raw -ErrorAction SilentlyContinue
     if (-not $protocol) { $protocol = "See QUEUE_WORKER.md for the full protocol." }
@@ -332,7 +388,46 @@ $protocol
             $reviewLinkInstruction = ""
         }
 
-        return @"
+        # Worktree-based prompt: agent is already on the correct branch in an isolated worktree
+        if ($worktreePath) {
+            return @"
+You are a Planka queue worker operating on the "$($project.name)" project.
+You have been assigned a $cardType card.
+
+PROJECT CONFIG:
+$configJson
+$claudeMdSection
+
+CARD ID: $cardIdVal
+CARD NAME: $cardName
+CARD DESCRIPTION: $descriptionText
+CARD TYPE: $cardType
+
+WORKTREE MODE: You are working in an isolated git worktree. The branch ${cardType}/$sanitizedName has already been created from the latest main for you.
+
+YOUR MISSION:
+1. The card has ALREADY been moved to "Working" for you.
+2. Read the card name and description carefully and understand the task.
+3. cd to $worktreePath
+4. You are already on branch ${cardType}/$sanitizedName (created from latest origin/main). Do NOT run git pull or git checkout -b.
+5. Implement the fix/feature in the codebase.
+$(if ($project.localDevUrl) { "6. Test your changes against the local dev server at $($project.localDevUrl)." } else { "6. Test your changes as appropriate for the project." })
+7. Commit: git add -A then git commit -m "[$cardType] $cardName"
+8. Push: git push origin ${cardType}/$sanitizedName
+9. Move card to Ready to Review: PATCH $PLANKA_URL/cards/$cardIdVal with body {"listId":"$reviewListId","position":1}
+10. Add a comment summarizing your changes and the branch name.
+$reviewLinkInstruction
+12. Do NOT run git checkout main -- the orchestrator will clean up the worktree automatically.
+
+Authenticate first: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$PLANKA_EMAIL","password":"$PLANKA_PASSWORD"}
+Use Invoke-WebRequest -UseBasicParsing for all Planka API calls.
+
+FULL PROTOCOL:
+$protocol
+"@
+        } else {
+            # Fallback: non-worktree prompt (shouldn't normally be used for work agents)
+            return @"
 You are a Planka queue worker operating on the "$($project.name)" project.
 You have been assigned a $cardType card.
 
@@ -365,6 +460,7 @@ Use Invoke-WebRequest -UseBasicParsing for all Planka API calls.
 FULL PROTOCOL:
 $protocol
 "@
+        }
     }
 }
 
@@ -401,6 +497,12 @@ function Cleanup-Agents {
             # Clean up temp prompt file
             if ($job.promptFile -and (Test-Path $job.promptFile)) {
                 Remove-Item $job.promptFile -Force -ErrorAction SilentlyContinue
+            }
+
+            # Clean up worktree if this was a work agent
+            if ($job.worktreePath -and $job.mainWorkspace) {
+                Write-Host "    Cleaning up worktree: $($job.worktreePath)" -ForegroundColor DarkGray
+                Remove-Worktree -workspace $job.mainWorkspace -worktreePath $job.worktreePath -branchName $job.branchName
             }
 
             $finishedIds += $key
@@ -451,6 +553,12 @@ function Cleanup-Agents {
                 Remove-Item $job.promptFile -Force -ErrorAction SilentlyContinue
             }
 
+            # Clean up worktree if this was a work agent
+            if ($job.worktreePath -and $job.mainWorkspace) {
+                Write-Host "    Cleaning up worktree: $($job.worktreePath)" -ForegroundColor DarkGray
+                Remove-Worktree -workspace $job.mainWorkspace -worktreePath $job.worktreePath -branchName $job.branchName
+            }
+
             $finishedIds += $key
         }
     }
@@ -465,12 +573,6 @@ function Process-Board {
     $boardId = $project.boardId
     $lists   = $project.lists
 
-    # Per-project locking: skip if this project already has an active agent
-    if (Project-HasActiveAgent -projectName $project.name) {
-        Write-Host "    $($project.name): agent already active, skipping" -ForegroundColor DarkYellow
-        return
-    }
-
     try {
         $board = Planka-Get "/boards/$boardId"
         $cards = $board.included.cards
@@ -479,29 +581,49 @@ function Process-Board {
         return
     }
 
-    # Priority 1: Complete list (deploy)
-    $completeCards = @($cards | Where-Object { $_.listId -eq $lists.complete -and -not $activeJobs.ContainsKey("$($project.name):$($_.id)") })
-    foreach ($card in $completeCards) {
-        if ($slots.Value -le 0) { return }
-        Write-Host "    DEPLOYING: $($card.name)" -ForegroundColor Green
-        $prompt = Build-AgentPrompt -card $card -action "deploy" -listSource $lists.complete -project $project
-        $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $project.workspace
-        $activeJobs["$($project.name):$($card.id)"] = $agentInfo
-        $slots.Value--
-        return  # One agent per project
+    # Priority 1: Complete list (deploy) -- per-project locking for deploys only
+    if (-not (Project-HasActiveDeployAgent -projectName $project.name)) {
+        $completeCards = @($cards | Where-Object { $_.listId -eq $lists.complete -and -not $activeJobs.ContainsKey("$($project.name):$($_.id)") })
+        foreach ($card in $completeCards) {
+            if ($slots.Value -le 0) { return }
+            Write-Host "    DEPLOYING: $($card.name)" -ForegroundColor Green
+            $prompt = Build-AgentPrompt -card $card -action "deploy" -listSource $lists.complete -project $project
+            $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $project.workspace
+            $agentInfo.action = "deploy"
+            $agentInfo.worktreePath = $null
+            $agentInfo.mainWorkspace = $project.workspace
+            $agentInfo.branchName = $null
+            $activeJobs["$($project.name):$($card.id)"] = $agentInfo
+            $slots.Value--
+            break  # One deploy at a time per project
+        }
     }
 
-    # Priority 2: Fix list
+    # Priority 2: Fix list -- each agent gets an isolated worktree
     $fixCards = @($cards | Where-Object { $_.listId -eq $lists.fix -and -not $activeJobs.ContainsKey("$($project.name):$($_.id)") })
     foreach ($card in $fixCards) {
         if ($slots.Value -le 0) { return }
-        Write-Host "    CLAIMING FIX: $($card.name)" -ForegroundColor Cyan
+
+        $sanitizedName = $card.name -replace '[^a-zA-Z0-9]','-' -replace '-+','-' -replace '^-|-$',''
+        $branchName = "fix/$sanitizedName"
+
+        $worktreePath = Create-Worktree -workspace $project.workspace -branchName $branchName -cardId $card.id
+        if (-not $worktreePath) {
+            Write-Host "    Failed to create worktree for $($card.name), skipping" -ForegroundColor Red
+            continue
+        }
+
+        Write-Host "    CLAIMING FIX: $($card.name) (worktree: $worktreePath)" -ForegroundColor Cyan
         Planka-Patch "/cards/$($card.id)" ('{"listId":"' + $lists.working + '","position":1}')
-        $prompt = Build-AgentPrompt -card $card -action "work" -listSource $lists.fix -project $project
-        $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $project.workspace
+        $prompt = Build-AgentPrompt -card $card -action "work" -listSource $lists.fix -project $project -worktreePath $worktreePath
+        $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $worktreePath
+        $agentInfo.action = "work"
+        $agentInfo.worktreePath = $worktreePath
+        $agentInfo.mainWorkspace = $project.workspace
+        $agentInfo.branchName = $branchName
         $activeJobs["$($project.name):$($card.id)"] = $agentInfo
         $slots.Value--
-        return  # One agent per project
+        # No return -- allow multiple work agents per project via worktrees
     }
 
     # Priority 3: Feature list (only if no fix cards)
@@ -509,13 +631,27 @@ function Process-Board {
         $featureCards = @($cards | Where-Object { $_.listId -eq $lists.feature -and -not $activeJobs.ContainsKey("$($project.name):$($_.id)") })
         foreach ($card in $featureCards) {
             if ($slots.Value -le 0) { return }
-            Write-Host "    CLAIMING FEATURE: $($card.name)" -ForegroundColor Magenta
+
+            $sanitizedName = $card.name -replace '[^a-zA-Z0-9]','-' -replace '-+','-' -replace '^-|-$',''
+            $branchName = "feature/$sanitizedName"
+
+            $worktreePath = Create-Worktree -workspace $project.workspace -branchName $branchName -cardId $card.id
+            if (-not $worktreePath) {
+                Write-Host "    Failed to create worktree for $($card.name), skipping" -ForegroundColor Red
+                continue
+            }
+
+            Write-Host "    CLAIMING FEATURE: $($card.name) (worktree: $worktreePath)" -ForegroundColor Magenta
             Planka-Patch "/cards/$($card.id)" ('{"listId":"' + $lists.working + '","position":1}')
-            $prompt = Build-AgentPrompt -card $card -action "work" -listSource $lists.feature -project $project
-            $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $project.workspace
+            $prompt = Build-AgentPrompt -card $card -action "work" -listSource $lists.feature -project $project -worktreePath $worktreePath
+            $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $worktreePath
+            $agentInfo.action = "work"
+            $agentInfo.worktreePath = $worktreePath
+            $agentInfo.mainWorkspace = $project.workspace
+            $agentInfo.branchName = $branchName
             $activeJobs["$($project.name):$($card.id)"] = $agentInfo
             $slots.Value--
-            return  # One agent per project
+            # No return -- allow multiple work agents per project via worktrees
         }
     }
 }

@@ -1,0 +1,9 @@
+Deployment complete. Here's a summary of what was done:
+
+1. **Merged** `feature/Fun-Fact-Tooltips-on-Foods-Exercises` into `main` (resolved merge conflict in `app.js` — kept the feature branch version with all `funFact` properties)
+2. **Pushed** to `origin/main`
+3. **Deleted** the feature branch locally and remotely
+4. **Commented** on the card: "Merged to main. Awaiting manual deploy."
+5. **Moved** the card to the **Deployed** list
+
+**Manual deploy still needed:** `cd C:\Users\JonDi\Desktop\Hosting && docker compose up -d --build energy-explorer`
