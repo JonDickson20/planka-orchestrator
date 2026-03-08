@@ -9,6 +9,7 @@ const PORT = process.env.DASHBOARD_PORT || 3333;
 const ROOT_DIR = path.resolve(__dirname, "..");
 const PROJECTS_DIR = path.join(ROOT_DIR, "projects");
 const LOGS_DIR = path.join(ROOT_DIR, "logs");
+const STATUS_FILE = path.join(ROOT_DIR, "status.json");
 
 const PLANKA_URL = "https://planka.jondxn.com/api";
 const PLANKA_EMAIL = "jondickson20@gmail.com";
@@ -82,12 +83,20 @@ function loadProjects() {
   return projects;
 }
 
+function readStatusFile() {
+  try {
+    if (fs.existsSync(STATUS_FILE)) {
+      return JSON.parse(fs.readFileSync(STATUS_FILE, "utf8"));
+    }
+  } catch {}
+  return null;
+}
+
 function parseLogFiles() {
   const logs = [];
   try {
     const files = fs.readdirSync(LOGS_DIR).filter((f) => f.endsWith(".log"));
     for (const file of files) {
-      // Format: agent_{cardId}_{YYYYMMDD-HHmmss}.log
       const match = file.match(/^agent_(\d+)_(\d{8}-\d{6})\.log$/);
       if (!match) continue;
       const stat = fs.statSync(path.join(LOGS_DIR, file));
@@ -113,35 +122,46 @@ function parseLogFiles() {
   return logs;
 }
 
-function detectActiveAgents(logEntries) {
-  // An agent is "active" if its log file was modified in the last 2 minutes
-  // and the process may still be running.
-  const now = Date.now();
-  const cutoff = 2 * 60 * 1000;
-  return logEntries.filter((log) => {
-    const lastMod = new Date(log.lastModified).getTime();
-    return now - lastMod < cutoff;
-  });
-}
-
-function detectCompletedAgents(logEntries) {
-  const now = Date.now();
-  const cutoff = 2 * 60 * 1000;
-  return logEntries.filter((log) => {
-    const lastMod = new Date(log.lastModified).getTime();
-    return now - lastMod >= cutoff;
-  });
-}
-
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// API: Overall status
+// API: Overall status — uses status.json for active agents, log files for history
 app.get("/api/status", (req, res) => {
+  const status = readStatusFile();
   const logs = parseLogFiles();
-  const active = detectActiveAgents(logs);
-  const recent = detectCompletedAgents(logs).slice(0, 20);
-  res.json({ active, recent });
+
+  // Active agents from status.json (written by the orchestrator in real time)
+  let active = [];
+  if (status && status.activeJobs) {
+    active = status.activeJobs.map((job) => ({
+      projectName: job.projectName,
+      cardId: job.cardId,
+      startTime: job.startTime,
+      elapsedMinutes: job.elapsedMinutes,
+      logFile: job.logFile,
+    }));
+  }
+
+  // Build set of active log files to exclude from recent
+  const activeLogFiles = new Set(active.map((a) => a.logFile));
+
+  // Recent = all logs not currently active, most recent first
+  const recent = logs
+    .filter((l) => !activeLogFiles.has(l.filename))
+    .slice(0, 30);
+
+  // Orchestrator metadata
+  const orchestrator = status
+    ? {
+        startedAt: status.startedAt,
+        lastUpdate: status.timestamp,
+        pollInterval: status.pollInterval,
+        agentTimeout: status.agentTimeout,
+        maxWorkers: status.maxWorkers,
+      }
+    : null;
+
+  res.json({ active, recent, orchestrator });
 });
 
 // API: Queue depth per project
@@ -178,7 +198,7 @@ app.get("/api/logs", (req, res) => {
   res.json(logs);
 });
 
-// API: Read a specific log file
+// API: Read a specific log file (supports tail parameter)
 app.get("/api/logs/:filename", (req, res) => {
   const filename = path.basename(req.params.filename);
   if (!/^agent_\d+_\d{8}-\d{6}\.log$/.test(filename)) {
@@ -189,6 +209,12 @@ app.get("/api/logs/:filename", (req, res) => {
     return res.status(404).json({ error: "Log file not found" });
   }
   const content = fs.readFileSync(filepath, "utf8");
+  // Optional: return only the last N lines
+  const tail = parseInt(req.query.tail, 10);
+  if (tail > 0) {
+    const lines = content.split("\n");
+    return res.type("text/plain").send(lines.slice(-tail).join("\n"));
+  }
   res.type("text/plain").send(content);
 });
 

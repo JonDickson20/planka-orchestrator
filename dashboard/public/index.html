@@ -22,6 +22,15 @@
   }
   header h1 { font-size: 20px; font-weight: 600; }
   header h1 span { color: #4c9aff; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .orchestrator-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+  .orchestrator-badge.online { background: #276749; color: #9ae6b4; }
+  .orchestrator-badge.offline { background: #742a2a; color: #feb2b2; }
   .refresh-info {
     font-size: 12px;
     color: #718096;
@@ -79,13 +88,6 @@
     font-size: 11px;
     font-weight: 700;
   }
-  .badge-active { background: #276749; color: #9ae6b4; }
-  .badge-fix { background: #9b2c2c; color: #feb2b2; }
-  .badge-feature { background: #2b6cb0; color: #90cdf4; }
-  .badge-working { background: #744210; color: #fbd38d; }
-  .badge-review { background: #553c9a; color: #d6bcfa; }
-  .badge-complete { background: #276749; color: #9ae6b4; }
-  .badge-stuck { background: #9b2c2c; color: #feb2b2; }
   .badge-count {
     background: #2d3748;
     color: #a0aec0;
@@ -102,14 +104,34 @@
     padding: 12px 14px;
     margin-bottom: 8px;
   }
-  .agent-card .card-id { font-size: 11px; color: #718096; }
+  .agent-card .agent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .agent-card .project-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #e2e8f0;
+  }
   .agent-card .elapsed {
-    float: right;
-    font-size: 13px;
+    font-size: 14px;
     color: #48bb78;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
+  .agent-card .elapsed.warning { color: #ecc94b; }
+  .agent-card .elapsed.danger { color: #fc8181; }
+  .agent-card .card-id { font-size: 11px; color: #718096; }
+  .agent-card .log-link {
+    font-size: 11px;
+    color: #90cdf4;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: 8px;
+  }
+  .agent-card .log-link:hover { color: #63b3ed; }
   .no-data {
     color: #718096;
     font-style: italic;
@@ -136,33 +158,24 @@
   }
   td.num { text-align: center; font-variant-numeric: tabular-nums; }
   td.num.nonzero { color: #fbd38d; font-weight: 600; }
+  td.num.stuck { color: #fc8181; font-weight: 600; }
 
-  /* Log list */
-  .log-entry {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid #1e2d3d;
-    cursor: pointer;
-    font-size: 13px;
-  }
-  .log-entry:hover { background: #0f1419; margin: 0 -18px; padding: 8px 18px; }
-  .log-entry:last-child { border-bottom: none; }
-  .log-entry .log-name { color: #90cdf4; }
-  .log-entry .log-size { color: #718096; font-size: 11px; }
-
-  /* Log viewer - full width */
+  /* Recent jobs */
   .full-width { grid-column: 1 / -1; }
-  #log-viewer {
-    display: none;
+  .log-row {
+    cursor: pointer;
+    transition: background 0.15s;
   }
+  .log-row:hover { background: #243247; }
+  .log-row td { font-size: 12px; }
+
+  /* Log viewer */
+  #log-viewer { display: none; }
   #log-viewer .panel-header {
     cursor: pointer;
+    background: #243247;
   }
-  #log-viewer .panel-header:hover {
-    background: #2d3748;
-  }
+  #log-viewer .panel-header:hover { background: #2d3748; }
   #log-content {
     font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
     font-size: 12px;
@@ -175,13 +188,36 @@
     padding: 14px 18px;
   }
   .loading { text-align: center; padding: 30px; color: #718096; }
+
+  /* Orchestrator stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 10px 24px;
+    background: #151d28;
+    border-bottom: 1px solid #2d3748;
+    font-size: 12px;
+    color: #718096;
+  }
+  .stats-bar .stat-label { color: #4a5568; margin-right: 4px; }
+  .stats-bar .stat-value { color: #a0aec0; font-weight: 600; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
 <header>
   <h1><span>Planka</span> Orchestrator Dashboard</h1>
-  <div class="refresh-info"><span class="dot"></span>Auto-refresh every 10s &mdash; <span id="last-updated">loading...</span></div>
+  <div class="header-right">
+    <span class="orchestrator-badge offline" id="orch-badge">Offline</span>
+    <div class="refresh-info"><span class="dot"></span>Auto-refresh 10s &mdash; <span id="last-updated">loading...</span></div>
+  </div>
 </header>
+<div class="stats-bar" id="stats-bar" style="display:none">
+  <div><span class="stat-label">Uptime:</span> <span class="stat-value" id="stat-uptime">-</span></div>
+  <div><span class="stat-label">Poll interval:</span> <span class="stat-value" id="stat-poll">-</span></div>
+  <div><span class="stat-label">Agent timeout:</span> <span class="stat-value" id="stat-timeout">-</span></div>
+  <div><span class="stat-label">Max workers:</span> <span class="stat-value" id="stat-workers">-</span></div>
+  <div><span class="stat-label">Last orchestrator update:</span> <span class="stat-value" id="stat-last-update">-</span></div>
+</div>
 <main>
   <!-- Active Agents -->
   <div class="panel">
@@ -225,13 +261,22 @@
 <script>
 function formatElapsed(startISO) {
   const ms = Date.now() - new Date(startISO).getTime();
-  const totalSec = Math.floor(ms / 1000);
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return h + "h " + m + "m " + s + "s";
-  if (m > 0) return m + "m " + s + "s";
+  if (h > 0) return h + "h " + String(m).padStart(2, "0") + "m " + String(s).padStart(2, "0") + "s";
+  if (m > 0) return m + "m " + String(s).padStart(2, "0") + "s";
   return s + "s";
+}
+
+function formatUptime(startISO) {
+  const ms = Date.now() - new Date(startISO).getTime();
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return h + "h " + m + "m";
+  return m + "m";
 }
 
 function formatSize(bytes) {
@@ -245,25 +290,57 @@ function formatTime(iso) {
   return d.toLocaleString();
 }
 
+function timeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return sec + "s ago";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + "m ago";
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return hrs + "h " + (min % 60) + "m ago";
+  const days = Math.floor(hrs / 24);
+  return days + "d ago";
+}
+
+function elapsedClass(startISO) {
+  const ms = Date.now() - new Date(startISO).getTime();
+  const min = ms / 60000;
+  if (min > 25) return "elapsed danger";
+  if (min > 15) return "elapsed warning";
+  return "elapsed";
+}
+
+// Keep cached data for live timer updates
+let cachedActive = [];
+
 async function fetchStatus() {
   try {
     const res = await fetch("/api/status");
     const data = await res.json();
 
-    // Active agents
-    const activeEl = document.getElementById("active-agents");
-    document.getElementById("active-count").textContent = data.active.length;
-    if (data.active.length === 0) {
-      activeEl.innerHTML = '<div class="no-data">No active agents</div>';
+    cachedActive = data.active;
+
+    // Orchestrator status
+    const badge = document.getElementById("orch-badge");
+    const statsBar = document.getElementById("stats-bar");
+    if (data.orchestrator) {
+      const lastUpdate = new Date(data.orchestrator.lastUpdate).getTime();
+      const stale = Date.now() - lastUpdate > 120000; // 2 min
+      badge.className = "orchestrator-badge " + (stale ? "offline" : "online");
+      badge.textContent = stale ? "Stale" : "Online";
+      statsBar.style.display = "flex";
+      document.getElementById("stat-uptime").textContent = formatUptime(data.orchestrator.startedAt);
+      document.getElementById("stat-poll").textContent = data.orchestrator.pollInterval + "s";
+      document.getElementById("stat-timeout").textContent = data.orchestrator.agentTimeout + " min";
+      document.getElementById("stat-workers").textContent = data.orchestrator.maxWorkers;
+      document.getElementById("stat-last-update").textContent = timeAgo(data.orchestrator.lastUpdate);
     } else {
-      activeEl.innerHTML = data.active.map(a => `
-        <div class="agent-card">
-          <span class="elapsed">${formatElapsed(a.startTime)}</span>
-          <div class="card-id">Card: ${a.cardId}</div>
-          <div style="margin-top:4px;font-size:12px;color:#718096">${a.filename}</div>
-        </div>
-      `).join("");
+      badge.className = "orchestrator-badge offline";
+      badge.textContent = "Offline";
+      statsBar.style.display = "none";
     }
+
+    renderActiveAgents();
 
     // Recent jobs
     const recentEl = document.getElementById("recent-jobs");
@@ -271,21 +348,39 @@ async function fetchStatus() {
     if (data.recent.length === 0) {
       recentEl.innerHTML = '<div class="no-data">No recent jobs</div>';
     } else {
-      recentEl.innerHTML = `<table>
-        <thead><tr><th>Log File</th><th>Card ID</th><th>Started</th><th>Size</th><th></th></tr></thead>
-        <tbody>${data.recent.map(l => `
-          <tr>
-            <td><span class="log-entry-name" style="color:#90cdf4;cursor:pointer" onclick="viewLog('${l.filename}')">${l.filename}</span></td>
-            <td style="color:#718096;font-size:12px">${l.cardId}</td>
-            <td style="color:#718096;font-size:12px">${formatTime(l.startTime)}</td>
-            <td style="color:#718096;font-size:12px">${formatSize(l.size)}</td>
-            <td><button onclick="viewLog('${l.filename}')" style="background:#2d3748;color:#90cdf4;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">View</button></td>
-          </tr>
-        `).join("")}</tbody>
-      </table>`;
+      recentEl.innerHTML = '<table>' +
+        '<thead><tr><th>Log File</th><th>Card ID</th><th>Started</th><th>Size</th><th></th></tr></thead>' +
+        '<tbody>' + data.recent.map(function(l) {
+          return '<tr class="log-row" onclick="viewLog(\'' + l.filename + '\')">' +
+            '<td style="color:#90cdf4">' + l.filename + '</td>' +
+            '<td style="color:#718096">' + l.cardId + '</td>' +
+            '<td style="color:#718096">' + timeAgo(l.startTime) + '</td>' +
+            '<td style="color:#718096">' + formatSize(l.size) + '</td>' +
+            '<td><button onclick="event.stopPropagation();viewLog(\'' + l.filename + '\')" style="background:#2d3748;color:#90cdf4;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">View</button></td>' +
+            '</tr>';
+        }).join("") + '</tbody></table>';
     }
   } catch (err) {
     console.error("Failed to fetch status:", err);
+  }
+}
+
+function renderActiveAgents() {
+  const activeEl = document.getElementById("active-agents");
+  document.getElementById("active-count").textContent = cachedActive.length;
+  if (cachedActive.length === 0) {
+    activeEl.innerHTML = '<div class="no-data">No active agents</div>';
+  } else {
+    activeEl.innerHTML = cachedActive.map(function(a) {
+      var logClick = a.logFile ? ' <span class="log-link" onclick="viewLog(\'' + a.logFile + '\')">view log</span>' : '';
+      return '<div class="agent-card">' +
+        '<div class="agent-header">' +
+          '<span class="project-name">' + (a.projectName || "Unknown") + '</span>' +
+          '<span class="' + elapsedClass(a.startTime) + '">' + formatElapsed(a.startTime) + '</span>' +
+        '</div>' +
+        '<div class="card-id">Card: ' + a.cardId + logClick + '</div>' +
+      '</div>';
+    }).join("");
   }
 }
 
@@ -294,36 +389,41 @@ async function fetchQueue() {
     const res = await fetch("/api/queue");
     const data = await res.json();
 
-    const el = document.getElementById("queue-depth");
+    var el = document.getElementById("queue-depth");
     if (data.length === 0) {
       el.innerHTML = '<div class="no-data">No projects configured</div>';
       return;
     }
-    el.innerHTML = `<table>
-      <thead><tr><th>Project</th><th>Fix</th><th>Feature</th><th>Working</th><th>Review</th><th>Complete</th><th>Stuck</th></tr></thead>
-      <tbody>${data.map(p => {
+    el.innerHTML = '<table>' +
+      '<thead><tr><th>Project</th><th>Fix</th><th>Feature</th><th>Working</th><th>Review</th><th>Complete</th><th>Stuck</th></tr></thead>' +
+      '<tbody>' + data.map(function(p) {
         if (p.error) {
-          return `<tr><td>${p.name}</td><td colspan="6" style="color:#fc8181">${p.error}</td></tr>`;
+          return '<tr><td>' + p.name + '</td><td colspan="6" style="color:#fc8181">' + p.error + '</td></tr>';
         }
-        const c = p.counts;
-        function cell(v) { return '<td class="num' + (v > 0 ? ' nonzero' : '') + '">' + v + '</td>'; }
-        return `<tr><td>${p.name}</td>${cell(c.Fix)}${cell(c.Feature)}${cell(c.Working)}${cell(c["Ready to Review"])}${cell(c.Complete)}${cell(c.Stuck)}</tr>`;
-      }).join("")}</tbody>
-    </table>`;
+        var c = p.counts;
+        function cell(v, cls) {
+          var extra = v > 0 ? (cls || " nonzero") : "";
+          return '<td class="num' + extra + '">' + v + '</td>';
+        }
+        return '<tr><td>' + p.name + '</td>' +
+          cell(c.Fix) + cell(c.Feature) + cell(c.Working) +
+          cell(c["Ready to Review"]) + cell(c.Complete) + cell(c.Stuck, " stuck") +
+          '</tr>';
+      }).join("") + '</tbody></table>';
   } catch (err) {
     console.error("Failed to fetch queue:", err);
   }
 }
 
 async function viewLog(filename) {
-  const viewer = document.getElementById("log-viewer");
-  const content = document.getElementById("log-content");
-  const nameEl = document.getElementById("log-viewer-name");
+  var viewer = document.getElementById("log-viewer");
+  var content = document.getElementById("log-content");
+  var nameEl = document.getElementById("log-viewer-name");
   nameEl.textContent = filename;
   content.textContent = "Loading...";
   viewer.style.display = "block";
   try {
-    const res = await fetch("/api/logs/" + encodeURIComponent(filename));
+    var res = await fetch("/api/logs/" + encodeURIComponent(filename));
     content.textContent = await res.text();
     content.scrollTop = content.scrollHeight;
   } catch {
@@ -341,8 +441,12 @@ function refresh() {
   document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
 }
 
+// Full refresh every 10 seconds
 refresh();
 setInterval(refresh, 10000);
+
+// Update elapsed timers every second for smooth counting
+setInterval(renderActiveAgents, 1000);
 </script>
 </body>
 </html>
