@@ -1,0 +1,21 @@
+All 12 cards created successfully in the Ideas list. Here's a summary:
+
+### Feature Ideas (idea_bot) — 6 cards
+| # | Title | Category |
+|---|-------|----------|
+| 1 | Auto-Dismiss Listings from Authorized Sellers During Scans | Automation |
+| 2 | Add CSV Export for Monitoring Results and Report History | Data/Insights |
+| 3 | Configurable Scan Frequency per Brand | Functionality |
+| 4 | Keyword Suggestion Engine Using Gemini API | Functionality |
+| 5 | Add Listing Detail Preview Modal on Monitoring Page | UX |
+| 6 | Add Retry Queue with Exponential Backoff for eBay API Calls | Error Handling |
+
+### Specialist Ideas — 6 cards (each authored by its specialist bot)
+| Specialist | Title |
+|------------|-------|
+| a11y_bot | Add ARIA Live Regions and Focus Management for SPA Navigation |
+| marketing_bot | Add Social Proof Metrics Bar and Trust Badges to Landing Page |
+| perf_bot | Add Server-Side Response Caching for eBay Browse API Queries |
+| security_bot | Add Rate Limiting and Session Hardening for Auth Endpoints |
+| seo_bot | Add Server-Rendered Landing Page with Meta Tags and Structured Data |
+| visualqa_bot | Add Responsive Card Layout for Monitoring Listings on Mobile |

@@ -1,0 +1,15 @@
+Deployment complete. Here's the summary:
+
+**Card: Migrate from JSON File Storage to SQLite**
+
+| Step | Status |
+|------|--------|
+| Merge `feature/Migrate-from-JSON-File-Storage-to-SQLite` → `master` | Done (db9a2a3) |
+| Push to origin | Done |
+| Delete local branch | Done |
+| Delete remote branch | Failed (set as default branch on GitHub — needs manual fix) |
+| Docker rebuild (`vero`) | Done — container running |
+| Comment on card | Done |
+| Move to Deployed | Done |
+
+**Note:** The remote branch `feature/Migrate-from-JSON-File-Storage-to-SQLite` couldn't be deleted because GitHub has it set as the default branch. The GitHub repo's default branch should be changed to `master` to allow cleanup.

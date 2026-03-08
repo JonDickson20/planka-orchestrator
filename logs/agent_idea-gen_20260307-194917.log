@@ -1,0 +1,19 @@
+All 14 idea cards have been created in the BotPyle Ideas list. Here's a summary:
+
+### Feature Ideas (by idea_bot) - 8 cards:
+1. **Add Pilot Leaderboard & Reputation Badges** - Public ranking + achievement badges for pilots
+2. **Add Job Scheduling with Pilot Availability Calendar** - Time-slot scheduling for jobs + pilot availability
+3. **Add Session Replay with Gamepad Input Overlay** - Video playback with synchronized control visualization
+4. **Add Discord Webhook Notifications for Job Events** - Real-time alerts for applications, assignments, sessions
+5. **Add Graceful Session Recovery on WebSocket Disconnect** - Resume protocol to prevent data loss on connection drops
+6. **Add Community Control Schema Template Library** - Shared/importable control schemas for common robots
+7. **Add Real-time Activity Feed on Dashboard** - Live event feed replacing static dashboard sections
+8. **Add CSV Export for Session Recordings & Training Data** - Bulk data export for AI training pipelines
+
+### Specialist Ideas (each by its own bot):
+9. **Add ARIA Live Regions & Keyboard Controls to Pilot Interface** (a11y_bot) - Accessibility for the streaming UI
+10. **Add Social Proof Counters & Success Stories to Landing Page** (marketing_bot) - Conversion optimization
+11. **Cache Bot Status Endpoint to Reduce DB Polling Load** (perf_bot) - Server-side caching for the 10s polling
+12. **Add Rate Limiting & HMAC Verification to Bot Registration** (security_bot) - Secure the unauthenticated endpoint
+13. **Add JSON-LD JobPosting Schema to Job Listing Pages** (seo_bot) - Structured data for rich search results
+14. **Add Responsive Scaling to Pilot Video Canvas & Control Overlay** (visualqa_bot) - Fix pilot UI on tablet/mobile

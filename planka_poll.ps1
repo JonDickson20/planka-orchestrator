@@ -14,11 +14,34 @@ $PLANKA_PASSWORD = "YL*ZKs9PvMR5PfQrWpiBHQLy"
 $POLL_INTERVAL       = 30
 $MAX_WORKERS         = 2      # Max simultaneous Claude Code agents (total across all projects)
 $MAX_AGENT_MINUTES   = 30     # Kill agents that run longer than this
+$MIN_IDEAS           = 10     # Minimum ideas per project before replenishment
 $PROJECTS_DIR        = Join-Path $PSScriptRoot "projects"
+$AGENTS_DIR          = Join-Path $PSScriptRoot "agents"
 $LOG_DIR             = Join-Path $PSScriptRoot "logs"
 $WORKTREE_DIR        = Join-Path $PSScriptRoot "worktrees"
+$STATUS_FILE         = Join-Path $PSScriptRoot "status.json"
+
+# Bot accounts (each agent type authenticates as its own Planka user)
+$BOT_PASSWORD = "Planka4Bots2026"
+$BOT_ACCOUNTS = @{
+    worker        = "worker_bot"
+    deploy        = "deploy_bot"
+    "idea-gen"    = "idea_bot"
+}
+# Maps agent filenames (without .md) to their bot username
+$AGENT_BOT_MAP = @{
+    "SEO_AUDIT"             = "seo_bot"
+    "MARKETING_CONVERSION"  = "marketing_bot"
+    "SECURITY_PENTEST"      = "security_bot"
+    "ACCESSIBILITY_AUDIT"   = "a11y_bot"
+    "PERFORMANCE_AUDIT"     = "perf_bot"
+    "VISUAL_QA"             = "visualqa_bot"
+}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Cloudflare cache purge config
+$CF_CONFIG_PATH = "C:\Users\JonDi\Desktop\Hosting\cloudflare.json"
 
 # Ensure log and worktree directories
 if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null }
@@ -27,6 +50,37 @@ if (-not (Test-Path $WORKTREE_DIR)) { New-Item -ItemType Directory -Path $WORKTR
 # State
 # Each entry: { process, cardId, startTime, promptFile, logFile, action, worktreePath, mainWorkspace }
 $activeJobs = @{}
+$script:startedAt = Get-Date -Format "o"
+
+# Write orchestrator status to disk (read by dashboard)
+function Write-Status {
+    $jobs = @()
+    foreach ($entry in $activeJobs.GetEnumerator()) {
+        $job = $entry.Value
+        $elapsed = [math]::Round(((Get-Date) - $job.startTime).TotalMinutes, 1)
+        $logName = if ($job.logFile) { Split-Path $job.logFile -Leaf } else { "" }
+        $jobs += @{
+            key = $entry.Key
+            cardId = $job.cardId
+            projectName = ($entry.Key -split ":")[0]
+            startTime = $job.startTime.ToString("o")
+            elapsedMinutes = $elapsed
+            logFile = $logName
+        }
+    }
+    $status = @{
+        timestamp = (Get-Date).ToString("o")
+        startedAt = $script:startedAt
+        pollInterval = $POLL_INTERVAL
+        maxWorkers = $MAX_WORKERS
+        agentTimeout = $MAX_AGENT_MINUTES
+        activeJobs = $jobs
+    }
+    try {
+        $json = $status | ConvertTo-Json -Depth 3 -Compress
+        [System.IO.File]::WriteAllText($STATUS_FILE, $json)
+    } catch {}
+}
 
 # Auth (cached, re-auth only on failure)
 $script:token = $null
@@ -86,6 +140,18 @@ function Planka-Patch {
         } else {
             throw
         }
+    }
+}
+
+# Purge Cloudflare cache for a subdomain (called after deploy agents finish)
+function Purge-CloudflareCache {
+    param([string]$subdomain)
+    $purgeScript = "C:\Users\JonDi\Desktop\Hosting\purge-cache.ps1"
+    if (-not (Test-Path $purgeScript)) { return }
+    try {
+        & powershell -ExecutionPolicy Bypass -File $purgeScript -Subdomain $subdomain
+    } catch {
+        Write-Host "    Warning: Cache purge script failed: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
@@ -207,6 +273,18 @@ function Remove-Worktree {
     }
 }
 
+# Get list of specialist agent files (everything except FEATURE_IDEAS.md)
+function Get-SpecialistAgentNames {
+    $names = @()
+    $agentFiles = Get-ChildItem -Path $AGENTS_DIR -Filter "*.md" -ErrorAction SilentlyContinue
+    foreach ($f in $agentFiles) {
+        if ($f.Name -ne "FEATURE_IDEAS.md") {
+            $names += $f.Name
+        }
+    }
+    return $names
+}
+
 # Agent Spawning
 function Spawn-Agent {
     param([string]$cardId, [string]$prompt, [string]$workspace)
@@ -248,7 +326,7 @@ function Move-CardToStuck {
     try {
         Planka-Patch "/cards/$cardId" ('{"listId":"' + $stuckListId + '","position":1}')
         $escapedMsg = $message -replace '\\', '\\\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", ''
-        Planka-Post "/cards/$cardId/comment-actions" ('{"text":"' + $escapedMsg + '"}')
+        Planka-Post "/cards/$cardId/comments" ('{"text":"' + $escapedMsg + '"}')
     } catch {
         Write-Host "    Warning: Failed to move card $cardId to Stuck: $($_.Exception.Message)" -ForegroundColor Red
     }
@@ -305,12 +383,23 @@ $claudeMd
     if ($card.description) {
         $descriptionText = $card.description
     } else {
-        $descriptionText = "(No description provided -- work from the card title alone.)"
+        $descriptionText = "(No description provided -- work from the card title and any comments below.)"
+    }
+
+    # Always fetch card comments for full context
+    $comments = Get-CardComments -cardId $card.id
+    $commentsSection = ""
+    if ($comments.Count -gt 0) {
+        $commentsList = ($comments | ForEach-Object { "- $_" }) -join "`n"
+        $commentsSection = @"
+
+CARD COMMENTS (additional context from humans or previous agents):
+$commentsList
+"@
     }
 
     if ($action -eq "deploy") {
-        # Fetch comments and find branch name
-        $comments = Get-CardComments -cardId $card.id
+        # Find branch name from comments
         $branchName = Find-BranchName -comments $comments
         if ($branchName) {
             $branchInstruction = "BRANCH NAME: $branchName"
@@ -322,28 +411,31 @@ $claudeMd
         $cardIdVal = $card.id
         $cardName = $card.name
 
-        if ($project.deployMethod -eq "git-push-main") {
-            $deploySteps = @"
-5. git push origin main (triggers auto-deploy)
-6. Delete the branch locally and remotely: git branch -d BRANCHNAME then git push origin --delete BRANCHNAME
-7. Add a comment to the card: 'Merged to main and deployed to production.'
-8. Move card to Deployed: PATCH $PLANKA_URL/cards/$cardIdVal with body {"listId":"$deployedListId","position":1}
-"@
-        } elseif ($project.deployMethod -eq "manual") {
-            $deploySteps = @"
-5. git push origin main
-6. Delete the branch locally and remotely: git branch -d BRANCHNAME then git push origin --delete BRANCHNAME
-7. Add a comment to the card: 'Merged to main. Awaiting manual deploy.'
-8. Move card to Deployed: PATCH $PLANKA_URL/cards/$cardIdVal with body {"listId":"$deployedListId","position":1}
-"@
-        } else {
-            $deploySteps = @"
-5. git push origin main
-6. Run deploy script if applicable.
-7. Clean up branches.
-8. Add a comment and move card to Deployed.
+        # Docker rebuild + cache purge instructions (if project has a subdomain)
+        $dockerStep = ""
+        if ($project.subdomain) {
+            $sub = $project.subdomain
+            $dockerStep = @"
+7. DEPLOY TO HOSTING: Rebuild and restart the Docker container so the live site updates:
+   Run: cd /c/Users/JonDi/Desktop/Hosting
+   Run: docker compose up -d --build $sub
+   Run: docker compose ps $sub
+   Verify the container is running and healthy.
+8. PURGE CLOUDFLARE CACHE: Run the cache purge script so the live site serves fresh content immediately:
+   Run: powershell -ExecutionPolicy Bypass -File /c/Users/JonDi/Desktop/Hosting/purge-cache.ps1 -Subdomain $sub
+   If the purge script reports no API token configured, that is OK — the Caddy s-maxage=60 header ensures
+   Cloudflare's edge cache expires within 60 seconds automatically. Note this in your deploy comment.
+   Run: cd $($project.workspace -replace '\\','/')
 "@
         }
+
+        $deploySteps = @"
+5. git push origin main
+6. Delete the branch locally and remotely: git branch -d BRANCHNAME then git push origin --delete BRANCHNAME
+$dockerStep
+9. Add a comment to the card summarizing what was merged and deployed. Include the branch name.
+10. Move card to Deployed: PATCH $PLANKA_URL/cards/$cardIdVal with body {"listId":"$deployedListId","position":1}
+"@
 
         return @"
 You are a Planka queue worker operating on the "$($project.name)" project.
@@ -356,6 +448,7 @@ $claudeMdSection
 CARD ID: $cardIdVal
 CARD NAME: $cardName
 CARD DESCRIPTION: $descriptionText
+$commentsSection
 
 $branchInstruction
 
@@ -369,7 +462,7 @@ DEPLOYMENT STEPS:
 4. Resolve any merge conflicts if they arise.
 $deploySteps
 
-Authenticate first: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$PLANKA_EMAIL","password":"$PLANKA_PASSWORD"}
+Authenticate as Deploy Bot: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$($BOT_ACCOUNTS['deploy'])","password":"$BOT_PASSWORD"}
 Use Invoke-WebRequest -UseBasicParsing for all Planka API calls.
 
 FULL PROTOCOL:
@@ -419,7 +512,7 @@ $(if ($project.localDevUrl) { "6. Test your changes against the local dev server
 $reviewLinkInstruction
 12. Do NOT run git checkout main -- the orchestrator will clean up the worktree automatically.
 
-Authenticate first: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$PLANKA_EMAIL","password":"$PLANKA_PASSWORD"}
+Authenticate as Worker Bot: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$($BOT_ACCOUNTS['worker'])","password":"$BOT_PASSWORD"}
 Use Invoke-WebRequest -UseBasicParsing for all Planka API calls.
 
 FULL PROTOCOL:
@@ -439,10 +532,11 @@ CARD ID: $cardIdVal
 CARD NAME: $cardName
 CARD DESCRIPTION: $descriptionText
 CARD TYPE: $cardType
+$commentsSection
 
 YOUR MISSION:
 1. The card has ALREADY been moved to "Working" for you.
-2. Read the card name and description carefully and understand the task.
+2. Read the card name, description, and any comments above to fully understand the task.
 3. cd to $($project.workspace)
 4. git pull origin main then git checkout -b ${cardType}/$sanitizedName
 5. Implement the fix/feature in the codebase.
@@ -454,7 +548,7 @@ $(if ($project.localDevUrl) { "6. Test your changes against the local dev server
 $reviewLinkInstruction
 12. git checkout main
 
-Authenticate first: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$PLANKA_EMAIL","password":"$PLANKA_PASSWORD"}
+Authenticate as Worker Bot: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$($BOT_ACCOUNTS['worker'])","password":"$BOT_PASSWORD"}
 Use Invoke-WebRequest -UseBasicParsing for all Planka API calls.
 
 FULL PROTOCOL:
@@ -462,6 +556,89 @@ $protocol
 "@
         }
     }
+}
+
+# Build Idea Generation Prompt
+function Build-IdeaGenPrompt {
+    param($project, [string[]]$existingIdeas, [int]$ideasNeeded, [string[]]$specialistAgents)
+
+    $configJson = $project | ConvertTo-Json -Depth 5
+
+    $claudeMd = Get-ProjectClaudeMd -workspace $project.workspace
+    $claudeMdSection = ""
+    if ($claudeMd) {
+        $claudeMdSection = @"
+
+PROJECT CLAUDE.MD (coding conventions, architecture):
+$claudeMd
+"@
+    }
+
+    $existingList = "(none)"
+    if ($existingIdeas.Count -gt 0) {
+        $existingList = ($existingIdeas | ForEach-Object { "- $_" }) -join "`n"
+    }
+
+    $specialistSection = "(none)"
+    if ($specialistAgents.Count -gt 0) {
+        $specialistLines = @()
+        foreach ($agentFile in $specialistAgents) {
+            $agentKey = $agentFile -replace '\.md$',''
+            $botUser = $AGENT_BOT_MAP[$agentKey]
+            if ($botUser) {
+                $specialistLines += "- $AGENTS_DIR\$agentFile  -->  Authenticate as: $botUser / $BOT_PASSWORD"
+            } else {
+                $specialistLines += "- $AGENTS_DIR\$agentFile  -->  Authenticate as: $($BOT_ACCOUNTS['idea-gen']) / $BOT_PASSWORD"
+            }
+        }
+        $specialistSection = $specialistLines -join "`n"
+    }
+
+    $ideasListId = $project.lists.ideas
+    $featureIdeasMd = Join-Path $AGENTS_DIR "FEATURE_IDEAS.md"
+
+    return @"
+You are a Planka queue worker operating on the "$($project.name)" project.
+Your task is to generate improvement ideas and create them as cards in the Ideas list.
+
+PROJECT CONFIG:
+$configJson
+$claudeMdSection
+
+EXISTING IDEAS (do NOT duplicate these):
+$existingList
+
+YOUR MISSION:
+1. Read the idea generation guide at: $featureIdeasMd
+2. Explore the codebase at $($project.workspace) to understand the application.
+   Read key files: routes, controllers, views/templates, models, config files, package manifests, etc.
+3. Generate $ideasNeeded feature/improvement ideas for the application.
+   Think across categories: UX, functionality, data/insights, automation, integrations, error handling.
+   If $ideasNeeded is 0, skip this step (the Ideas list already has enough feature ideas).
+4. For EACH of the following specialist agent files, read the file and generate 1 additional idea from that specialist's perspective.
+   IMPORTANT: Each specialist has its OWN bot account. You MUST authenticate as that specialist's bot when creating its card so the card shows the right author.
+   Get a separate auth token for each specialist bot BEFORE creating their card.
+$specialistSection
+   Read each file to understand what that specialist focuses on, then think about what they would specifically suggest for THIS application based on the code you explored.
+5. For EACH idea, create a Planka card using the correct bot's auth token:
+   POST $PLANKA_URL/lists/$ideasListId/cards
+   Body: {"name":"<clear concise title>","description":"<3-5 sentences: what, why, rough approach>","position":<incrementing number starting at 65536>,"type":"project"}
+
+AUTHENTICATION:
+- For FEATURE ideas (step 3), authenticate as Idea Bot: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"$($BOT_ACCOUNTS['idea-gen'])","password":"$BOT_PASSWORD"}
+- For SPECIALIST ideas (step 4), authenticate as each specialist's bot listed above (different username for each).
+- To get a token: POST $PLANKA_URL/access-tokens with {"emailOrUsername":"<username>","password":"<password>"} -- the response has {"item":"<token>"}
+- Use the token as: Authorization: Bearer <token>
+- Use Invoke-WebRequest -UseBasicParsing for all Planka API calls.
+
+CARD QUALITY:
+- Be SPECIFIC: "Add Redis caching for provider search" not "Improve performance"
+- Include the WHY: what problem does this solve or what value does it add?
+- Each idea should be a single, self-contained unit of work
+- Do NOT duplicate any existing ideas listed above
+- Title: concise action phrase (e.g., "Add bulk CSV import for providers")
+- Description: 3-5 sentences covering what, why, and rough approach
+"@
 }
 
 # Clean Up Finished/Timed-Out Agents
@@ -483,15 +660,19 @@ function Cleanup-Agents {
 
             try { $proc.Kill() } catch {}
 
-            # Move card to Stuck
-            $stuckListId = Get-StuckListId -jobKey $key
-            if ($stuckListId) {
-                $logTail = ""
-                if ($job.logFile -and (Test-Path $job.logFile)) {
-                    $logTail = (Get-Content $job.logFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+            # Move card to Stuck (skip for idea-gen -- no real card)
+            if ($cardId -ne "idea-gen") {
+                $stuckListId = Get-StuckListId -jobKey $key
+                if ($stuckListId) {
+                    $logTail = ""
+                    if ($job.logFile -and (Test-Path $job.logFile)) {
+                        $logTail = (Get-Content $job.logFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+                    }
+                    Move-CardToStuck -cardId $cardId -stuckListId $stuckListId `
+                        -message "Agent timed out after $MAX_AGENT_MINUTES minutes. Log tail:`n$logTail"
                 }
-                Move-CardToStuck -cardId $cardId -stuckListId $stuckListId `
-                    -message "Agent timed out after $MAX_AGENT_MINUTES minutes. Log tail:`n$logTail"
+            } else {
+                Write-Host "    Idea generation timed out for $key" -ForegroundColor Yellow
             }
 
             # Clean up temp prompt file
@@ -517,33 +698,58 @@ function Cleanup-Agents {
             # Treat null or 0 exit code as success (cmd.exe piping can return null)
             if ($null -eq $exitCode -or $exitCode -eq 0) {
                 Write-Host "[$timestamp] AGENT FINISHED: $key (exit 0, ran $mins min)" -ForegroundColor Green
-            } else {
-                Write-Host "[$timestamp] AGENT FAILED: $key (exit $exitCode, ran $mins min)" -ForegroundColor Red
 
-                # Only move to Stuck if the card is still in Working
-                # (agent may have already moved it to Ready to Review before crashing)
-                $stuckListId = Get-StuckListId -jobKey $key
-                $workingListId = Get-WorkingListId -jobKey $key
-                if ($stuckListId -and $workingListId) {
-                    $shouldMove = $false
-                    try {
-                        $cardData = Planka-Get "/cards/$cardId"
-                        if ($cardData.item.listId -eq $workingListId) {
-                            $shouldMove = $true
-                        } else {
-                            Write-Host "    Card already moved (not in Working), skipping Stuck move" -ForegroundColor DarkYellow
-                        }
-                    } catch {
-                        $shouldMove = $true  # If we can't check, try to move anyway
+                # If this was a deploy agent, purge Cloudflare cache as a safety net
+                if ($key -match ":(\d+)$" -and $cardId -ne "idea-gen") {
+                    # Look up project subdomain from config
+                    $projectName = $key.Split(":")[0]
+                    $projectFiles = Get-ChildItem -Path $PROJECTS_DIR -Filter "*.json" -ErrorAction SilentlyContinue
+                    foreach ($pf in $projectFiles) {
+                        try {
+                            $pcfg = Get-Content $pf.FullName -Raw | ConvertFrom-Json
+                            if ($pcfg.name -eq $projectName -and $pcfg.subdomain) {
+                                # Check if card was in Complete list (deploy action)
+                                try {
+                                    $cardData = Planka-Get "/cards/$cardId"
+                                    if ($cardData.item.listId -eq $pcfg.lists.deployed) {
+                                        Purge-CloudflareCache -subdomain $pcfg.subdomain
+                                    }
+                                } catch {}
+                            }
+                        } catch {}
                     }
+                }
+            } else {
+                if ($cardId -eq "idea-gen") {
+                    Write-Host "[$timestamp] IDEA GEN FAILED: $key (exit $exitCode, ran $mins min)" -ForegroundColor Yellow
+                } else {
+                    Write-Host "[$timestamp] AGENT FAILED: $key (exit $exitCode, ran $mins min)" -ForegroundColor Red
 
-                    if ($shouldMove) {
-                        $logTail = ""
-                        if ($job.logFile -and (Test-Path $job.logFile)) {
-                            $logTail = (Get-Content $job.logFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+                    # Only move to Stuck if the card is still in Working
+                    # (agent may have already moved it to Ready to Review before crashing)
+                    $stuckListId = Get-StuckListId -jobKey $key
+                    $workingListId = Get-WorkingListId -jobKey $key
+                    if ($stuckListId -and $workingListId) {
+                        $shouldMove = $false
+                        try {
+                            $cardData = Planka-Get "/cards/$cardId"
+                            if ($cardData.item.listId -eq $workingListId) {
+                                $shouldMove = $true
+                            } else {
+                                Write-Host "    Card already moved (not in Working), skipping Stuck move" -ForegroundColor DarkYellow
+                            }
+                        } catch {
+                            $shouldMove = $true  # If we can't check, try to move anyway
                         }
-                        Move-CardToStuck -cardId $cardId -stuckListId $stuckListId `
-                            -message "Agent exited with code $exitCode after $mins min."
+
+                        if ($shouldMove) {
+                            $logTail = ""
+                            if ($job.logFile -and (Test-Path $job.logFile)) {
+                                $logTail = (Get-Content $job.logFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+                            }
+                            Move-CardToStuck -cardId $cardId -stuckListId $stuckListId `
+                                -message "Agent exited with code $exitCode after $mins min."
+                        }
                     }
                 }
             }
@@ -654,6 +860,23 @@ function Process-Board {
             # No return -- allow multiple work agents per project via worktrees
         }
     }
+
+    # Priority 4: Ideas replenishment (only when no work cards exist)
+    if ($lists.ideas) {
+        $ideasCards = @($cards | Where-Object { $_.listId -eq $lists.ideas })
+        if ($ideasCards.Count -lt $MIN_IDEAS) {
+            if ($slots.Value -le 0) { return }
+            $ideasNeeded = $MIN_IDEAS - $ideasCards.Count
+            $existingTitles = @($ideasCards | ForEach-Object { $_.name })
+            $specialists = Get-SpecialistAgentNames
+            Write-Host "    IDEAS LOW ($($ideasCards.Count)/$MIN_IDEAS): spawning idea gen agent (+$($specialists.Count) specialist)" -ForegroundColor DarkMagenta
+            $prompt = Build-IdeaGenPrompt -project $project -existingIdeas $existingTitles -ideasNeeded $ideasNeeded -specialistAgents $specialists
+            $agentInfo = Spawn-Agent -cardId "idea-gen" -prompt $prompt -workspace $project.workspace
+            $activeJobs["$($project.name):idea-gen"] = $agentInfo
+            $slots.Value--
+            return
+        }
+    }
 }
 
 # Main
@@ -706,6 +929,7 @@ while ($true) {
 
     # Clean up finished/timed-out agents
     Cleanup-Agents
+    Write-Status
 
     # Check capacity
     $slotsAvailable = $MAX_WORKERS - $activeJobs.Count

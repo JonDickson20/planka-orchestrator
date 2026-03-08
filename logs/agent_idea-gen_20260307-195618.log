@@ -1,0 +1,17 @@
+All 12 idea cards created successfully in the Planka Ideas list. Here's a summary:
+
+**6 Feature Ideas** (created as `idea_bot`):
+1. **Add webhook endpoint for inbound CI/CD events** — Enable external systems to push status updates to cards
+2. **Add agent success/failure analytics with historical trends** — Track and chart agent outcomes over time
+3. **Add configurable card templates per project** — Standardize Fix/Feature card descriptions
+4. **Add daily email digest of orchestrator activity** — PM summary without checking dashboard
+5. **Add pre-spawn branch conflict detection** — Prevent wasted agent runs from merge conflicts
+6. **Add project health score to the dashboard** — At-a-glance project status (0-100 score)
+
+**6 Specialist Ideas** (each created with the specialist's own bot account):
+- **Accessibility** (`a11y_bot`): Add ARIA live regions and semantic landmarks to the dashboard
+- **Marketing** (`marketing_bot`): Add a cumulative time-saved ROI tracker to the dashboard
+- **Performance** (`perf_bot`): Add parallel board polling and API response caching
+- **Security** (`security_bot`): Encrypt bot credentials at rest using Windows DPAPI
+- **SEO** (`seo_bot`): Add structured JSON-LD metadata to the dashboard for AI discoverability
+- **Visual QA** (`visualqa_bot`): Add responsive breakpoints and mobile layout to the dashboard

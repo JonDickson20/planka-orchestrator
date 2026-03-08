@@ -1,0 +1,18 @@
+All 13 cards created successfully. Here's a summary:
+
+### Feature Ideas (idea_bot) — 7 cards:
+1. **Add Undo/Redo for Timeline Actions** — Let kids experiment without fear of losing work
+2. **Add Preset Meal Templates (Breakfast, Lunch, Dinner)** — One-click balanced meal combos
+3. **Add Daily Energy Score Summary Card** — Letter grade + insights below the chart
+4. **Add Export Timeline as Downloadable Image** — PNG export for homework/sharing
+5. **Add Custom Food Builder for Creative Exploration** — Kids design their own food items
+6. **Add Mood and Focus Tracker Alongside Energy** — Separate mood/focus curves on the chart
+7. **Add Smart Suggestions Button to Optimize Timeline** — Personalized improvement tips
+
+### Specialist Ideas (each from its own bot):
+8. **Add Keyboard-Only Food Placement with ARIA Live Announcements** (a11y_bot) — Drag-and-drop is inaccessible; add keyboard controls + screen reader feedback
+9. **Add Classroom Mode with Shareable Lesson Plan CTA** (marketing_bot) — Drive teacher adoption with lesson plans + email capture
+10. **Self-Host Google Fonts and Add Preload Resource Hints** (perf_bot) — Eliminate third-party font dependency, save ~300ms FCP
+11. **Add Content Security Policy and Subresource Integrity for CDN Assets** (security_bot) — Harden against CDN compromise + add security headers
+12. **Add Open Graph Tags, Structured Data, and Canonical URL** (seo_bot) — Enable social sharing previews + search engine rich results
+13. **Add prefers-reduced-motion Support and Fix Food Item Selected State Visibility** (visualqa_bot) — Disable hero animation for motion-sensitive users + fix missing mobile selected state

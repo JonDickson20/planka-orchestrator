@@ -4,11 +4,21 @@ This document defines the operating procedure for AI agents working as queue wor
 
 ## Planka Credentials
 
-```
-Instance:   https://planka.jondxn.com
-Email:      jondickson20@gmail.com
-Password:   YL*ZKs9PvMR5PfQrWpiBHQLy
-```
+**Bot accounts** (each agent type has its own identity -- password for all bots: `Planka4Bots2026`):
+
+| Bot | Username | Used By |
+|-----|----------|---------|
+| Worker Bot | `worker_bot` | Fix/Feature work agents |
+| Deploy Bot | `deploy_bot` | Deploy agents |
+| Idea Bot | `idea_bot` | Feature idea generation |
+| SEO Bot | `seo_bot` | SEO-perspective ideas |
+| Marketing Bot | `marketing_bot` | Marketing-perspective ideas |
+| Security Bot | `security_bot` | Security-perspective ideas |
+| Accessibility Bot | `a11y_bot` | Accessibility-perspective ideas |
+| Performance Bot | `perf_bot` | Performance-perspective ideas |
+| Visual QA Bot | `visualqa_bot` | Visual QA-perspective ideas |
+
+Agents receive their credentials in the prompt from the orchestrator. Use whatever credentials are specified in YOUR prompt -- do not default to the admin account.
 
 ### Authentication
 
@@ -16,7 +26,7 @@ Planka uses JWT tokens. Obtain one via:
 
 ```
 POST /api/access-tokens
-Body: {"emailOrUsername":"<email>","password":"<password>"}
+Body: {"emailOrUsername":"<username>","password":"<password>"}
 Response: {"item":"<jwt_token>"}
 ```
 
@@ -33,7 +43,7 @@ Base URL: `https://planka.jondxn.com/api`
 | Create a list | POST | `/boards/{boardId}/lists` (body: `{name, position, type:"active"}`) |
 | Create a card | POST | `/lists/{listId}/cards` (body: `{name, description, position, type:"project"}`) |
 | Update a card (move to list) | PATCH | `/cards/{cardId}` (body: `{listId, position}`) |
-| Add comment to card | POST | `/cards/{cardId}/comment-actions` (body: `{text}`) |
+| Add comment to card | POST | `/cards/{cardId}/comments` (body: `{text}`) |
 | Delete a card | DELETE | `/cards/{cardId}` |
 
 > **Note:** When using PowerShell, use `Invoke-WebRequest` with `-UseBasicParsing` and `-ContentType "application/json"` for POST/PATCH requests. `Invoke-RestMethod` may hang on this host.
@@ -44,6 +54,7 @@ Every project board **must** have the following lists. The list IDs are defined 
 
 | List | Purpose |
 |------|---------|
+| **Trash** | Rejected ideas — moved here instead of deleted, freeing space in Ideas |
 | **Ideas** | Brainstorming / wish list — NOT picked up automatically |
 | **Fix** | Bug fix queue — work these FIRST |
 | **Feature** | Feature request queue — work these AFTER all Fix cards are done |
@@ -66,9 +77,11 @@ Each project has a JSON config file at `projects/<project-name>.json` with this 
   "boardId": "123456789",
   "workspace": "C:\\path\\to\\project\\repo",
   "localDevUrl": "http://127.0.0.1:8000",
+  "subdomain": "my-app",
   "deployMethod": "git-push-main",
   "deployNotes": "Pushing to main triggers auto-deploy.",
   "lists": {
+    "trash": "<list-id>",
     "ideas": "<list-id>",
     "fix": "<list-id>",
     "feature": "<list-id>",
@@ -89,6 +102,7 @@ Each project has a JSON config file at `projects/<project-name>.json` with this 
 | `boardId` | Yes | Planka board ID |
 | `workspace` | Yes | Absolute path to the git repo root on disk |
 | `localDevUrl` | No | URL of the local dev server for testing (if applicable) |
+| `subdomain` | No | Docker Compose service name / subdomain (e.g., `vero`). When set, deploy agents will rebuild the Docker container after merging to update the live site at `<subdomain>.jondxn.com`. |
 | `deployMethod` | Yes | One of: `git-push-main` (push to main triggers deploy), `manual` (human deploys), `script` (run a deploy script) |
 | `deployNotes` | No | Freeform notes about how deployment works for this project |
 | `lists` | Yes | Map of list names to Planka list IDs |
@@ -133,11 +147,11 @@ The orchestrator (`planka_poll.ps1`) handles claiming:
 
 ### Step 2 — Plan
 
-1. Read the card's **name** and **description** thoroughly. If no description is provided, work from the title alone.
+1. Read the card's **name**, **description**, and **comments** thoroughly. Context may be split across all three — the description might be empty with all details in the comments, or vice versa. If only a title is provided, work from that.
 2. Read the project's **CLAUDE.md** (included in your prompt if it exists) for coding conventions and architecture.
 3. Research the relevant files in the codebase at the project's `workspace` path.
 4. Write an implementation plan.
-5. **Post the plan as a comment** on the card via `POST /api/cards/{cardId}/comment-actions` with body `{"text":"..."}`.
+5. **Post the plan as a comment** on the card via `POST /api/cards/{cardId}/comments` with body `{"text":"..."}`.
 
 ### Step 3 — Execute
 
@@ -175,28 +189,42 @@ When a human reviewer moves a card from "Ready to Review" to **"Complete"**, the
 
 The deploy agent receives the **branch name** directly in its prompt (extracted from the card's comments by the orchestrator).
 
-### deployMethod: `git-push-main`
+### Core Steps (all deploy methods)
 
 1. `git checkout main`
 2. `git pull origin main`
 3. `git merge {branch-name} --no-ff -m "Merge {branch-name}: {card title}"`
-4. `git push origin main` — this triggers the project's auto-deploy pipeline.
-5. `git branch -d {branch-name}` — clean up local branch.
-6. `git push origin --delete {branch-name}` — clean up remote branch.
-7. **Add a comment** to the card: "Merged to main and deployed to production."
+4. `git push origin main`
+5. `git branch -d {branch-name}` -- clean up local branch.
+6. `git push origin --delete {branch-name}` -- clean up remote branch.
+
+### Docker Rebuild (if `subdomain` is set)
+
+If the project config has a `subdomain` field, the deploy agent also rebuilds the Docker container so the live site updates:
+
+```
+cd C:\Users\JonDi\Desktop\Hosting
+docker compose up -d --build {subdomain}
+docker compose ps {subdomain}   # verify container is running
+```
+
+This updates the app at `{subdomain}.jondxn.com` with the latest code from main.
+
+### Cloudflare Cache Purge
+
+After a Docker rebuild, Cloudflare's edge cache may still serve stale static assets (JS, CSS, etc.). The deploy prompt includes a cache purge step that runs `Hosting/purge-cache.ps1`. **Always run it.**
+
+Two layers of protection ensure deploys are reflected on the live site:
+
+1. **Cache purge script** — If `Hosting/cloudflare.json` has a valid API token, it purges the Cloudflare edge cache immediately. Takes effect in seconds.
+2. **`s-maxage=60` header** — Caddy sets this on all responses (unless the app sets its own `Cache-Control`). This tells Cloudflare's edge to expire cached content after 60 seconds, regardless of dashboard settings. Even if the purge script fails or has no token, the site updates within 1 minute.
+
+The orchestrator also runs a backup purge when the deploy agent finishes successfully.
+
+### Final Steps
+
+7. **Add a comment** to the card summarizing what was merged and deployed.
 8. **Move the card** to **"Deployed"**.
-
-### deployMethod: `manual`
-
-1. Merge the branch to main as above (steps 1–6).
-2. **Add a comment** to the card: "Merged to main. Awaiting manual deploy."
-3. **Move the card** to **"Deployed"** (human will deploy separately).
-
-### deployMethod: `script`
-
-1. Merge the branch to main as above (steps 1–6).
-2. Run the deploy script specified in the config.
-3. **Add a comment** with the result and **move the card** to **"Deployed"**.
 
 ## Orchestrator Features
 
@@ -215,8 +243,10 @@ The polling script (`planka_poll.ps1`) is a **persistent orchestrator** that run
 11. **Branch name injection** — for deploy actions, extracts the branch name from card comments and passes it directly.
 12. **Token caching** — authenticates once and re-auths only on 401 errors, not every poll cycle.
 13. **Temp file cleanup** — removes prompt files after agents finish.
-14. **Priority order** — Complete (deploy) → Fix (work) → Feature (work, only if no Fix cards exist).
+14. **Priority order** — Complete (deploy) → Fix (work) → Feature (work, only if no Fix cards exist) → Ideas replenishment (lowest).
 15. **Hot-reload** — project configs are re-read each poll cycle, so you can add new projects without restarting.
+16. **Idea generation** — when a project's Ideas list drops below 10 cards, spawns an idea generation agent that explores the codebase and creates new idea cards. Generates feature ideas to reach the minimum, plus 1 additional idea from each specialist agent perspective (SEO, Marketing, Performance, Security, Accessibility, Visual QA).
+17. **Auto-deploy** — when a project has a `subdomain` configured, deploy agents rebuild the Docker container after merging to update the live site.
 
 ### Running It
 
@@ -226,7 +256,7 @@ powershell -ExecutionPolicy Bypass -File planka_poll.ps1
 
 ### Adding a New Project
 
-1. Create a new board on Planka with the required lists (Ideas, Fix, Feature, Working, Ready to Review, Complete, Stuck, Deployed).
+1. Create a new board on Planka with the required lists (Trash, Ideas, Fix, Feature, Working, Ready to Review, Complete, Stuck, Deployed).
 2. Copy the list IDs from the Planka UI or API.
 3. Create a JSON config file in `projects/<project-name>.json` following the schema above.
 4. The orchestrator will pick it up on the next poll cycle — no restart needed.
@@ -239,3 +269,4 @@ powershell -ExecutionPolicy Bypass -File planka_poll.ps1
 - Follow existing code patterns and conventions found in each project's codebase and CLAUDE.md.
 - Cards in the "Ideas" list are never auto-picked. A human must promote them to Fix or Feature.
 - Agent logs are stored in `logs/` and include timestamps for debugging failed or timed-out runs.
+- **Cloudflare caching:** Caddy sets `Cache-Control: max-age=60` on responses so Cloudflare's edge cache expires quickly after deploys. If `cloudflare.json` in the Hosting directory has a valid API token, deploy agents will also purge the Cloudflare cache programmatically after Docker rebuilds.

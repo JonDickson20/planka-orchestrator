@@ -26,4 +26,4 @@ This is all feasible today and I've built most of it already. Lots of other peop
 
 I'll be polishing this system up, but wanted you to see the picture I keep mentioning more clearly. Now that's a pile of human brain dump, so here's an AI TLDR:
 
-TLDR: 
+TLDR: Stop coding one feature at a time with AI like a junior dev. Instead, set up a kanban board where you and I drop feature ideas as tickets. On my end, AI worker agents automatically pick up tickets, build the feature, test it in a headless browser, write unit tests, and move it to "ready for review." You just review and approve from your phone. Even better: a separate AI agent watches the codebase, traffic, and trends to continuously generate new feature ideas for the board. You become the project manager, not the developer — and your AI team works 24/7 whether you're at your desk or not.

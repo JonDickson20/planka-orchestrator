@@ -1,0 +1,21 @@
+All done. Here's a summary of what was implemented:
+
+**Branch:** `feature/Web-dashboard-for-orchestrator-status`
+
+**Files created:**
+- `dashboard/server.js` - Express server (port 3333) with 4 API endpoints:
+  - `/api/status` - active agents (log modified <2min ago) and recent completed jobs
+  - `/api/queue` - per-project queue depth from Planka API (Fix/Feature/Working/Review/Complete/Stuck)
+  - `/api/logs` - list all log files
+  - `/api/logs/:filename` - read a specific log file (with filename validation)
+- `dashboard/public/index.html` - dark-themed dashboard with:
+  - Active agents panel with elapsed time
+  - Per-project queue depth table
+  - Recent jobs table with inline log viewer
+  - Auto-refresh every 10 seconds
+- `dashboard/package.json` - Express dependency
+- `dashboard/.gitignore` - excludes node_modules
+
+**To run:** `cd dashboard && npm install && npm start`
+
+**Card moved** to Ready to Review. **Review link:** https://github.com/JonDickson20/planka-orchestrator/compare/main...feature/Web-dashboard-for-orchestrator-status

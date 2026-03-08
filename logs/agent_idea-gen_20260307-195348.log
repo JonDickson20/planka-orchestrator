@@ -1,0 +1,13 @@
+All 8 cards created successfully in the Ideas list. Here's a summary:
+
+**Feature Ideas** (idea_bot):
+1. **Automated Timesheet-to-Payroll CSV Export** — Configurable export matching QuickBooks/Paylocity import formats to eliminate manual payroll data entry
+2. **In-App Notification Center with Real-Time Alerts** — Bell icon with dropdown surfacing WorkspaceNotifications for timesheet status, messages, credentials, and deadlines
+
+**Specialist Ideas:**
+3. **Add Skip Navigation and ARIA Landmarks to Portal Layout** (a11y_bot) — Skip links, ARIA roles, and form labels for WCAG 2.2 AA compliance
+4. **Add Provider Testimonials and Placement Stats Near Registration Form** (marketing_bot) — Social proof and trust signals at the conversion decision point
+5. **Lazy-Load Base64 Provider Photos and Paginate Admin Lists** (perf_bot) — Reduce multi-MB page weight from inline base64 photos on admin views
+6. **Add Rate Limiting to Auth and Public Form Endpoints** (security_bot) — Throttle middleware on login, registration, password reset, and webhooks
+7. **Add JSON-LD Structured Data and Optimized Meta Descriptions to Public Pages** (seo_bot) — Organization/Service schema and keyword-optimized meta tags for search and AI discoverability
+8. **Add Responsive Table Wrappers for Mobile Portal Data Views** (visualqa_bot) — Prevent horizontal overflow on timesheet, availability, and admin tables at mobile viewports

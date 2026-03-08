@@ -1,0 +1,15 @@
+The comment endpoint is `/api/cards/{id}/comments`, not `/api/cards/{id}/comment-actions`. Comment posted successfully.
+
+Deployment complete. Here's a summary:
+
+**Card:** Git worktree isolation for parallel same-project agents
+**Branch:** `feature/Git-worktree-isolation-for-parallel-same-project-agents`
+**Actions taken:**
+1. Merged branch into `main` with `--no-ff` (commit `a0730c1`)
+2. Pushed `main` to origin
+3. Deleted branch locally and remotely
+4. Resolved stash conflict (preserved both worktree isolation changes and local working changes)
+5. Added deploy comment to card
+6. Moved card to **Deployed** list
+
+**Note:** The Planka comment endpoint has changed from `/comment-actions` to `/comments`. The `QUEUE_WORKER.md` documentation and orchestrator code should be updated to reflect this.

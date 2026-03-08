@@ -1,0 +1,14 @@
+Deployment complete. Here's a summary:
+
+**Card:** The last few foods aren't sorted. Sort them in where they belong by type like protein or fat
+
+**Actions taken:**
+1. Pulled latest main
+2. Merged `fix/The-last-few-foods-aren-t-sorted-Sort-them-in-where-they-belong-by-type-like-protein-or-fat` into main (1 file changed: `app.js`)
+3. Pushed to origin (`b280837..af122e6`)
+4. Deleted branch locally and remotely
+5. Rebuilt Docker container `energy-explorer` — running and healthy
+6. Posted deploy comment to card
+7. Moved card to **Deployed** list
+
+Live at https://energy-explorer.jondxn.com

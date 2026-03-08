@@ -1,9 +1,10 @@
 ﻿{
     "boardId":  "1723677218590163975",
     "name":  "HSP Portal",
-    "deployNotes":  "Pushing to main triggers Laravel Cloud auto-deploy.",
+    "deployNotes":  "Merge to main, push to GitHub, rebuild Docker container.",
     "localDevUrl":  "http://127.0.0.1:8500",
     "lists":  {
+                  "trash":  "1726135057514497968",
                   "ideas":  "1725475435145331833",
                   "complete":  "1723706359129572367",
                   "deployed":  "1723738539952178204",
@@ -13,6 +14,7 @@
                   "stuck":  "1723706359960044560",
                   "feature":  "1723706356780762124"
               },
+    "subdomain":  "hsp",
     "deployMethod":  "git-push-main",
     "workspace":  "C:\\Users\\JonDi\\Desktop\\HSP\\Portal"
 }

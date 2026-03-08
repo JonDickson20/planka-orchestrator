@@ -1,0 +1,18 @@
+{
+    "name": "AlexaMart",
+    "boardId": "1725949849448220474",
+    "workspace": "C:\\Users\\JonDi\\Desktop\\AlexaMart",
+    "deployMethod": "manual",
+    "deployNotes": "Local-only project. Uses ngrok tunnel for Alexa skill endpoint. No Docker deployment.",
+    "lists": {
+        "trash": "1726135059208996788",
+        "ideas": "1725949969103324992",
+        "fix": "1725949970588108609",
+        "feature": "1725949972072892226",
+        "working": "1725949973675116355",
+        "readyToReview": "1725949975268951876",
+        "complete": "1725949976938284869",
+        "stuck": "1725949978557286214",
+        "deployed": "1725949979991738183"
+    }
+}

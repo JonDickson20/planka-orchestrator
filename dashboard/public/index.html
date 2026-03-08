@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planka Orchestrator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+
+    header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 20px; font-weight: 600; }
+    .status-badge { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .status-dot.running { background: #3fb950; box-shadow: 0 0 8px #3fb95080; animation: pulse 2s infinite; }
+    .status-dot.stopped { background: #f85149; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+    .stats-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; flex: 1; min-width: 140px; }
+    .stat-card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .stat-card .value.green { color: #3fb950; }
+    .stat-card .value.yellow { color: #d29922; }
+    .stat-card .value.blue { color: #58a6ff; }
+
+    h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .section { margin-bottom: 32px; }
+
+    .workers-grid { display: grid; gap: 12px; }
+    .worker-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; display: flex; align-items: center; justify-content: space-between; }
+    .worker-card .info { flex: 1; }
+    .worker-card .project { font-size: 12px; color: #58a6ff; margin-bottom: 4px; }
+    .worker-card .card-name { font-weight: 600; }
+    .worker-card .elapsed { font-size: 14px; color: #d29922; font-weight: 600; white-space: nowrap; margin-left: 16px; }
+    .worker-card .log-link { font-size: 12px; color: #8b949e; cursor: pointer; text-decoration: underline; margin-top: 4px; }
+    .worker-card .log-link:hover { color: #58a6ff; }
+    .no-workers { color: #484f58; font-style: italic; padding: 16px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; }
+
+    .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+    .project-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+    .project-card h3 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .project-card h3 .subdomain { font-size: 12px; color: #8b949e; font-weight: 400; }
+    .list-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .list-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
+    .list-row .count { font-weight: 700; min-width: 24px; text-align: right; }
+    .list-row.fix { background: #f8514920; color: #f85149; }
+    .list-row.feature { background: #a371f720; color: #a371f7; }
+    .list-row.working { background: #d2992220; color: #d29922; }
+    .list-row.ready { background: #58a6ff20; color: #58a6ff; }
+    .list-row.ideas { background: #8b949e15; color: #8b949e; }
+    .list-row.complete { background: #3fb95020; color: #3fb950; }
+    .list-row.stuck { background: #f8514930; color: #f85149; }
+    .list-row.deployed { background: #3fb95015; color: #3fb95090; }
+
+    .logs-section { }
+    .log-list { background: #161b22; border: 1px solid #30363d; border-radius: 8px; max-height: 400px; overflow-y: auto; }
+    .log-entry { padding: 8px 16px; border-bottom: 1px solid #21262d; font-size: 13px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .log-entry:hover { background: #1c2128; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry .name { font-family: monospace; color: #e1e4e8; }
+    .log-entry .meta { font-size: 12px; color: #8b949e; white-space: nowrap; margin-left: 12px; }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000000cc; display: none; z-index: 100; justify-content: center; align-items: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 90%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { font-size: 14px; font-family: monospace; }
+    .modal-close { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 20px; padding: 4px 8px; }
+    .modal-close:hover { color: #e1e4e8; }
+    .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+    .modal-body pre { font-family: monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #c9d1d9; }
+
+    .refresh-info { font-size: 12px; color: #484f58; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Planka Orchestrator</h1>
+    <div class="status-badge">
+      <span class="refresh-info" id="refresh-info"></span>
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Checking...</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <div class="section">
+      <h2>Active Workers</h2>
+      <div class="workers-grid" id="workers"></div>
+    </div>
+
+    <div class="section">
+      <h2>Projects</h2>
+      <div class="projects-grid" id="projects"></div>
+    </div>
+
+    <div class="section logs-section">
+      <h2>Recent Logs</h2>
+      <div class="log-list" id="logs"></div>
+    </div>
+  </main>
+
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Log</h3>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body"><pre id="modal-content"></pre></div>
+    </div>
+  </div>
+
+  <script>
+    const LIST_LABELS = {
+      fix: 'Fix', feature: 'Feature', working: 'Working',
+      readyToReview: 'Ready to Review', ideas: 'Ideas',
+      complete: 'Complete', stuck: 'Stuck', deployed: 'Deployed'
+    };
+    const LIST_CLASSES = {
+      fix: 'fix', feature: 'feature', working: 'working',
+      readyToReview: 'ready', ideas: 'ideas',
+      complete: 'complete', stuck: 'stuck', deployed: 'deployed'
+    };
+    const LIST_ORDER = ['fix', 'feature', 'working', 'readyToReview', 'ideas', 'complete', 'stuck', 'deployed'];
+
+    let projectConfigs = [];
+    let boardCache = {};
+
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      return res.json();
+    }
+
+    function timeAgo(dateStr) {
+      const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function uptime(startedAt) {
+      const s = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      if (h > 0) return h + 'h ' + m + 'm';
+      return m + 'm';
+    }
+
+    async function loadStatus() {
+      try {
+        const status = await fetchJSON('/api/status');
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+
+        if (status.running) {
+          dot.className = 'status-dot running';
+          text.textContent = 'Running (' + status.ageSeconds + 's ago)';
+        } else {
+          dot.className = 'status-dot stopped';
+          text.textContent = status.error || status.message || 'Stopped';
+        }
+
+        // Stats bar
+        const totalWorkers = (status.activeJobs || []).length;
+        const maxWorkers = status.maxWorkers || 2;
+        const uptimeStr = status.startedAt ? uptime(status.startedAt) : '--';
+        document.getElementById('stats-bar').innerHTML = `
+          <div class="stat-card"><div class="label">Workers</div><div class="value ${totalWorkers > 0 ? 'yellow' : 'green'}">${totalWorkers}/${maxWorkers}</div></div>
+          <div class="stat-card"><div class="label">Projects</div><div class="value blue">${projectConfigs.length}</div></div>
+          <div class="stat-card"><div class="label">Uptime</div><div class="value">${uptimeStr}</div></div>
+          <div class="stat-card"><div class="label">Poll Interval</div><div class="value">${status.pollInterval || '--'}s</div></div>
+        `;
+
+        // Workers
+        const workersEl = document.getElementById('workers');
+        if (!status.activeJobs || status.activeJobs.length === 0) {
+          workersEl.innerHTML = '<div class="no-workers">No active workers — queue is idle</div>';
+        } else {
+          workersEl.innerHTML = status.activeJobs.map(job => `
+            <div class="worker-card">
+              <div class="info">
+                <div class="project">${job.projectName}</div>
+                <div class="card-name">${job.cardId === 'idea-gen' ? 'Generating ideas...' : 'Card ' + job.cardId}</div>
+                ${job.logFile ? `<div class="log-link" onclick="showLog('${job.logFile}')">View log</div>` : ''}
+              </div>
+              <div class="elapsed">${job.elapsedMinutes}m</div>
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        document.getElementById('status-dot').className = 'status-dot stopped';
+        document.getElementById('status-text').textContent = 'Dashboard error';
+      }
+    }
+
+    async function loadProjects() {
+      try {
+        projectConfigs = await fetchJSON('/api/projects');
+        const el = document.getElementById('projects');
+        const cards = [];
+
+        for (const proj of projectConfigs) {
+          let boardData = boardCache[proj.boardId];
+          if (!boardData) {
+            try {
+              boardData = await fetchJSON('/api/boards/' + proj.boardId);
+              boardCache[proj.boardId] = boardData;
+            } catch { boardData = { cards: [], lists: [] }; }
+          }
+
+          const counts = {};
+          for (const key of LIST_ORDER) {
+            const listId = proj.lists[key];
+            if (listId) {
+              counts[key] = boardData.cards.filter(c => c.listId === listId).length;
+            }
+          }
+
+          cards.push(`
+            <div class="project-card">
+              <h3>${proj.name} ${proj.subdomain ? `<span class="subdomain">${proj.subdomain}.jondxn.com</span>` : ''}</h3>
+              <div class="list-counts">
+                ${LIST_ORDER.map(key => counts[key] !== undefined ? `
+                  <div class="list-row ${LIST_CLASSES[key]}">
+                    <span>${LIST_LABELS[key]}</span>
+                    <span class="count">${counts[key]}</span>
+                  </div>
+                ` : '').join('')}
+              </div>
+            </div>
+          `);
+        }
+
+        el.innerHTML = cards.join('');
+      } catch (err) {
+        document.getElementById('projects').innerHTML = '<div class="no-workers">Failed to load projects</div>';
+      }
+    }
+
+    async function loadLogs() {
+      try {
+        const logs = await fetchJSON('/api/logs');
+        const el = document.getElementById('logs');
+        if (logs.length === 0) {
+          el.innerHTML = '<div class="log-entry"><span class="name" style="color:#484f58">No logs yet</span></div>';
+          return;
+        }
+        el.innerHTML = logs.map(log => `
+          <div class="log-entry" onclick="showLog('${log.name}')">
+            <span class="name">${log.name}</span>
+            <span class="meta">${formatSize(log.size)} &middot; ${timeAgo(log.modified)}</span>
+          </div>
+        `).join('');
+      } catch {}
+    }
+
+    async function showLog(filename) {
+      document.getElementById('modal-title').textContent = filename;
+      document.getElementById('modal-content').textContent = 'Loading...';
+      document.getElementById('modal-overlay').classList.add('active');
+      try {
+        const res = await fetch('/api/logs/' + filename);
+        const text = await res.text();
+        document.getElementById('modal-content').textContent = text || '(empty)';
+      } catch {
+        document.getElementById('modal-content').textContent = 'Failed to load log.';
+      }
+    }
+
+    document.getElementById('modal-close').onclick = () => {
+      document.getElementById('modal-overlay').classList.remove('active');
+    };
+    document.getElementById('modal-overlay').onclick = (e) => {
+      if (e.target === document.getElementById('modal-overlay')) {
+        document.getElementById('modal-overlay').classList.remove('active');
+      }
+    };
+
+    async function refresh() {
+      await loadStatus();
+      await loadLogs();
+      document.getElementById('refresh-info').textContent = 'Auto-refresh 15s';
+    }
+
+    // Initial load
+    (async () => {
+      await loadProjects();
+      await refresh();
+      // Refresh status/logs every 15s, projects every 2min
+      setInterval(refresh, 15000);
+      setInterval(() => { boardCache = {}; loadProjects(); }, 120000);
+    })();
+  </script>
+</body>
+</html>

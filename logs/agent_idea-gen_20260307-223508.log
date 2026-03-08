@@ -1,0 +1,23 @@
+All 16 cards created successfully. Here's a summary:
+
+## Cards Created in AlexaMart Ideas List
+
+**General Ideas (idea_bot):**
+1. **Add RemoveFromCart voice intent** - Complete CRUD loop for cart management
+2. **Add ViewCart intent to read back cart contents** - Voice-based cart awareness
+3. **Add quantity slot for multi-unit additions** - Support "add 3 bananas"
+4. **Include product price in Alexa confirmation response** - Informed purchase decisions
+5. **Add session health check with auto-recovery notification** - Graceful session expiry handling
+6. **Add shopping list intent for batch item queueing** - Queue multiple items before automation
+7. **Add web dashboard to view automation history and status** - Visual monitoring without terminal
+8. **Implement retry logic with exponential backoff** - Handle transient failures automatically
+9. **Add environment variable toggle for headless vs headed mode** - Reduce resource usage after login
+10. **Add product confirmation dialog before adding to cart** - Prevent wrong item additions
+
+**Specialist Ideas:**
+11. **Add SSML markup to Alexa responses** (a11y_bot) - Better voice pacing and pronunciation
+12. **Add onboarding tutorial flow with progressive skill discovery** (marketing_bot) - Reduce new user abandonment
+13. **Reuse Puppeteer page and block unnecessary resources** (perf_bot) - 40-60% faster page loads
+14. **Add rate limiting and input sanitization on /alexa endpoint** (security_bot) - Protect exposed ngrok URL
+15. **Optimize Alexa skill store listing with keyword-rich metadata** (seo_bot) - Improve skill discoverability
+16. **Add responsive status dashboard with browser state visualization** (visualqa_bot) - Visual automation monitor

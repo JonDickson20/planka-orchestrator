@@ -1,0 +1,8 @@
+Deployment complete. Here's what was done:
+
+1. **Verified main is up to date** — branch `fix/The-last-few-foods-aren-t-sorted-Sort-them-in-where-they-belong-by-type-like-protein-or-fat` was already merged (commit `af122e6`)
+2. **Rebuilt Docker container** — `energy-explorer` container recreated and running
+3. **Added deployment comment** to the card
+4. **Moved card to Deployed** list
+
+The live site at `energy-explorer.jondxn.com` is now updated with the sorted foods fix.
