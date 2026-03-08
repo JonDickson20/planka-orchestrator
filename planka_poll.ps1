@@ -17,16 +17,21 @@ $MAX_AGENT_MINUTES   = 30     # Kill agents that run longer than this
 $PROJECTS_DIR        = Join-Path $PSScriptRoot "projects"
 $LOG_DIR             = Join-Path $PSScriptRoot "logs"
 $WORKTREE_DIR        = Join-Path $PSScriptRoot "worktrees"
+$COST_SUMMARY_INTERVAL_MIN = 60  # Print cost summary every N minutes
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Load cost tracker module
+. (Join-Path $PSScriptRoot "cost_tracker.ps1")
 
 # Ensure log and worktree directories
 if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null }
 if (-not (Test-Path $WORKTREE_DIR)) { New-Item -ItemType Directory -Path $WORKTREE_DIR -Force | Out-Null }
 
 # State
-# Each entry: { process, cardId, startTime, promptFile, logFile, action, worktreePath, mainWorkspace }
+# Each entry: { process, cardId, cardName, projectName, startTime, promptFile, logFile, action, worktreePath, mainWorkspace }
 $activeJobs = @{}
+$script:lastCostSummaryTime = [datetime]::MinValue
 
 # Auth (cached, re-auth only on failure)
 $script:token = $null
@@ -209,7 +214,7 @@ function Remove-Worktree {
 
 # Agent Spawning
 function Spawn-Agent {
-    param([string]$cardId, [string]$prompt, [string]$workspace)
+    param([string]$cardId, [string]$cardName, [string]$projectName, [string]$prompt, [string]$workspace)
 
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $promptFile = Join-Path $env:TEMP "planka_agent_$cardId.txt"
@@ -219,12 +224,14 @@ function Spawn-Agent {
 
     $claudePath = "C:\Users\JonDi\.local\bin\claude.exe"
     $proc = Start-Process -FilePath "cmd.exe" `
-        -ArgumentList "/c", "type `"$promptFile`" | `"$claudePath`" -p --dangerously-skip-permissions > `"$logFile`" 2>&1" `
+        -ArgumentList "/c", "type `"$promptFile`" | `"$claudePath`" -p --dangerously-skip-permissions --output-format stream-json > `"$logFile`" 2>&1" `
         -WorkingDirectory $workspace -PassThru -NoNewWindow
 
     return @{
         process     = $proc
         cardId      = $cardId
+        cardName    = $cardName
+        projectName = $projectName
         promptFile  = $promptFile
         logFile     = $logFile
         startTime   = Get-Date
@@ -248,7 +255,7 @@ function Move-CardToStuck {
     try {
         Planka-Patch "/cards/$cardId" ('{"listId":"' + $stuckListId + '","position":1}')
         $escapedMsg = $message -replace '\\', '\\\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", ''
-        Planka-Post "/cards/$cardId/comment-actions" ('{"text":"' + $escapedMsg + '"}')
+        Planka-Post "/cards/$cardId/comments" ('{"text":"' + $escapedMsg + '"}')
     } catch {
         Write-Host "    Warning: Failed to move card $cardId to Stuck: $($_.Exception.Message)" -ForegroundColor Red
     }
@@ -483,15 +490,20 @@ function Cleanup-Agents {
 
             try { $proc.Kill() } catch {}
 
+            # Record cost data for timed-out agent
+            $parsedUsage = Parse-AgentLog -logFile $job.logFile
+            $runRecord = Record-AgentRun -cardId $cardId -cardName $job.cardName -projectName $job.projectName `
+                -startTime $job.startTime -endTime (Get-Date) -durationMinutes $mins `
+                -exitCode -1 -logFile $job.logFile -parsedUsage $parsedUsage
+            $costInfo = Format-CostComment -run $runRecord
+            Write-Host "    Cost: $costInfo" -ForegroundColor DarkYellow
+
             # Move card to Stuck
             $stuckListId = Get-StuckListId -jobKey $key
             if ($stuckListId) {
-                $logTail = ""
-                if ($job.logFile -and (Test-Path $job.logFile)) {
-                    $logTail = (Get-Content $job.logFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
-                }
+                $logTail = Extract-AgentResultText -logFile $job.logFile -tailLines 20
                 Move-CardToStuck -cardId $cardId -stuckListId $stuckListId `
-                    -message "Agent timed out after $MAX_AGENT_MINUTES minutes. Log tail:`n$logTail"
+                    -message "Agent timed out after $MAX_AGENT_MINUTES minutes. $costInfo`nLog tail:`n$logTail"
             }
 
             # Clean up temp prompt file
@@ -512,13 +524,33 @@ function Cleanup-Agents {
         # Check for normal exit
         if ($proc.HasExited) {
             $exitCode = $proc.ExitCode
-            $mins = [math]::Round(((Get-Date) - $job.startTime).TotalMinutes, 1)
+            $endTime = Get-Date
+            $mins = [math]::Round(($endTime - $job.startTime).TotalMinutes, 1)
+
+            # Parse cost data from agent log
+            $parsedUsage = Parse-AgentLog -logFile $job.logFile
+            $effectiveExit = if ($null -eq $exitCode) { 0 } else { $exitCode }
+            $runRecord = Record-AgentRun -cardId $cardId -cardName $job.cardName -projectName $job.projectName `
+                -startTime $job.startTime -endTime $endTime -durationMinutes $mins `
+                -exitCode $effectiveExit -logFile $job.logFile -parsedUsage $parsedUsage
+            $costInfo = Format-CostComment -run $runRecord
 
             # Treat null or 0 exit code as success (cmd.exe piping can return null)
             if ($null -eq $exitCode -or $exitCode -eq 0) {
                 Write-Host "[$timestamp] AGENT FINISHED: $key (exit 0, ran $mins min)" -ForegroundColor Green
+                Write-Host "    Cost: $costInfo" -ForegroundColor DarkYellow
+
+                # Post cost as comment on the card
+                try {
+                    $costComment = "Agent run stats: $costInfo"
+                    $escapedComment = $costComment -replace '\\', '\\\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", ''
+                    Planka-Post "/cards/$cardId/comments" ('{"text":"' + $escapedComment + '"}')
+                } catch {
+                    Write-Host "    Warning: Could not post cost comment to card" -ForegroundColor DarkYellow
+                }
             } else {
                 Write-Host "[$timestamp] AGENT FAILED: $key (exit $exitCode, ran $mins min)" -ForegroundColor Red
+                Write-Host "    Cost: $costInfo" -ForegroundColor DarkYellow
 
                 # Only move to Stuck if the card is still in Working
                 # (agent may have already moved it to Ready to Review before crashing)
@@ -538,12 +570,9 @@ function Cleanup-Agents {
                     }
 
                     if ($shouldMove) {
-                        $logTail = ""
-                        if ($job.logFile -and (Test-Path $job.logFile)) {
-                            $logTail = (Get-Content $job.logFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
-                        }
+                        $logTail = Extract-AgentResultText -logFile $job.logFile -tailLines 20
                         Move-CardToStuck -cardId $cardId -stuckListId $stuckListId `
-                            -message "Agent exited with code $exitCode after $mins min."
+                            -message "Agent exited with code $exitCode after $mins min. $costInfo"
                     }
                 }
             }
@@ -588,7 +617,7 @@ function Process-Board {
             if ($slots.Value -le 0) { return }
             Write-Host "    DEPLOYING: $($card.name)" -ForegroundColor Green
             $prompt = Build-AgentPrompt -card $card -action "deploy" -listSource $lists.complete -project $project
-            $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $project.workspace
+            $agentInfo = Spawn-Agent -cardId $card.id -cardName $card.name -projectName $project.name -prompt $prompt -workspace $project.workspace
             $agentInfo.action = "deploy"
             $agentInfo.worktreePath = $null
             $agentInfo.mainWorkspace = $project.workspace
@@ -616,7 +645,7 @@ function Process-Board {
         Write-Host "    CLAIMING FIX: $($card.name) (worktree: $worktreePath)" -ForegroundColor Cyan
         Planka-Patch "/cards/$($card.id)" ('{"listId":"' + $lists.working + '","position":1}')
         $prompt = Build-AgentPrompt -card $card -action "work" -listSource $lists.fix -project $project -worktreePath $worktreePath
-        $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $worktreePath
+        $agentInfo = Spawn-Agent -cardId $card.id -cardName $card.name -projectName $project.name -prompt $prompt -workspace $worktreePath
         $agentInfo.action = "work"
         $agentInfo.worktreePath = $worktreePath
         $agentInfo.mainWorkspace = $project.workspace
@@ -644,7 +673,7 @@ function Process-Board {
             Write-Host "    CLAIMING FEATURE: $($card.name) (worktree: $worktreePath)" -ForegroundColor Magenta
             Planka-Patch "/cards/$($card.id)" ('{"listId":"' + $lists.working + '","position":1}')
             $prompt = Build-AgentPrompt -card $card -action "work" -listSource $lists.feature -project $project -worktreePath $worktreePath
-            $agentInfo = Spawn-Agent -cardId $card.id -prompt $prompt -workspace $worktreePath
+            $agentInfo = Spawn-Agent -cardId $card.id -cardName $card.name -projectName $project.name -prompt $prompt -workspace $worktreePath
             $agentInfo.action = "work"
             $agentInfo.worktreePath = $worktreePath
             $agentInfo.mainWorkspace = $project.workspace
@@ -667,6 +696,7 @@ Write-Host "  Max workers: $MAX_WORKERS"
 Write-Host "  Agent timeout: $MAX_AGENT_MINUTES min"
 Write-Host "  Poll interval: ${POLL_INTERVAL}s"
 Write-Host "  Logs: $LOG_DIR"
+Write-Host "  Cost data: $COST_DATA_FILE"
 if (-not $Once) { Write-Host "  Press Ctrl+C to stop" }
 Write-Host "=========================================="
 Write-Host ""
@@ -735,6 +765,12 @@ while ($true) {
         $before = $activeJobs.Count
         Process-Board -project $proj -slots ([ref]$slotsAvailable)
         if ($activeJobs.Count -gt $before) { $claimedAny = $true }
+    }
+
+    # Periodic cost summary (every $COST_SUMMARY_INTERVAL_MIN minutes)
+    if (((Get-Date) - $script:lastCostSummaryTime).TotalMinutes -ge $COST_SUMMARY_INTERVAL_MIN) {
+        Write-CostSummary
+        $script:lastCostSummaryTime = Get-Date
     }
 
     if ($activeJobs.Count -gt 0) {
